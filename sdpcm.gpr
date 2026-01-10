@@ -4,7 +4,7 @@
 ----------------------------------------------------------------
 
 with "config/sdpcm_config.gpr";
-project Sdpcm is
+project SDPCM is
 
    for Library_Name use "sdpcm";
    for Library_Version use Project'Library_Name & ".so." & Sdpcm_Config.Crate_Version;
@@ -31,4 +31,4 @@ project Sdpcm is
       for Artifacts (".") use ("share");
    end Install;
 
-end Sdpcm;
+end SDPCM;
