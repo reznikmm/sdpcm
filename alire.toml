@@ -1,0 +1,10 @@
+name = "sdpcm"
+description = "WiFi driver based on SDPCM/BCDC host implementation in Ada"
+version = "0.1.0-dev"
+
+authors = ["Max Reznik"]
+maintainers = ["Max Reznik <reznikmm@gmail.com>"]
+maintainers-logins = ["reznikmm"]
+licenses = "MIT"
+website = "https://github.com/reznikmm/sdpcm"
+tags = ["network", "wireless", "driver"]
