@@ -90,16 +90,33 @@ package SDPCM is
       --  Clear any error state on the bus.
 
    package Generic_Bus is
+      --  Generic Bus Interface
+
+      pragma Unreferenced (Read_Backplane_Register);
+      pragma Unreferenced (Write_Backplane_Register);
+      pragma Unreferenced (Write_Prefix_Length);
+      pragma Unreferenced (Write_Prefix);
+      pragma Unreferenced (Start_Reading_WLAN);
+      pragma Unreferenced (Start_Writing_WLAN);
+      pragma Unreferenced (Write_Backplane);
+      pragma Unreferenced (Has_Event);
+      pragma Unreferenced (Available_Packet_Length);
+      pragma Unreferenced (Is_Ready_To_Send);
+      pragma Unreferenced (Clear_Error);
+
    end Generic_Bus;
-   --  Generic Bus Interface
 
    generic
       type Timeout is private;
       with function New_Timeout (Second : Natural) return Timeout;
       with function Is_Expired (Value : Timeout) return Boolean;
    package Generic_Timeouts is
+      --  Generic Timeouts Interface
+
+      pragma Unreferenced (New_Timeout);
+      pragma Unreferenced (Is_Expired);
+
    end Generic_Timeouts;
-   --  Generic Timeouts Interface
 
    type Resource_Kind is (Firmware, NVRAM, CLM_Blob);
    --  Kinds of resources used by the driver.
@@ -115,8 +132,11 @@ package SDPCM is
          Last : out Natural);
       --  Read resource of given kind.
    package Generic_Resources is
+      --  Generic Resources Interface
+
+      pragma Unreferenced (Read_Resource);
+
    end Generic_Resources;
-   --  Generic Resources Interface
 
    generic
       with function SSID return String;
@@ -127,7 +147,12 @@ package SDPCM is
 
       with function Security return SDPCM.Security_Mode;
    package Generic_Network is
+      --  Generic Network Configuration Interface
+
+      pragma Unreferenced (SSID);
+      pragma Unreferenced (Password);
+      pragma Unreferenced (Security);
+
    end Generic_Network;
-   --  Generic Network Configuration Interface
 
 end SDPCM;

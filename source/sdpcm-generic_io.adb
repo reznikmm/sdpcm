@@ -7,8 +7,6 @@ pragma Ada_2022;
 
 package body SDPCM.Generic_IO is
 
-   use type Interfaces.Unsigned_32;
-
    package Executor is
 
       type Step_Kind is
