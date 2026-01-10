@@ -8,3 +8,15 @@ maintainers-logins = ["reznikmm"]
 licenses = "MIT"
 website = "https://github.com/reznikmm/sdpcm"
 tags = ["network", "wireless", "driver"]
+
+long-description = '''
+Supported devices:
+* CYW43439 (with Raspberry Pi Pico W)
+'''
+
+[build-switches]
+development.optimization = ["-O0"]
+development.style_checks = ["-gnaty"]
+development.contracts = "Yes"
+"*".debug_info = "Yes"
+
