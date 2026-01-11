@@ -33,6 +33,8 @@ package SDPCM is
      with Component_Size => 8;
    --  Array of bytes.
 
+   pragma Warnings (Off, "is not referenced");
+
    generic
       with procedure Read_Backplane_Register
         (Address : Interfaces.Unsigned_32;
@@ -91,19 +93,6 @@ package SDPCM is
 
    package Generic_Bus is
       --  Generic Bus Interface
-
-      pragma Unreferenced (Read_Backplane_Register);
-      pragma Unreferenced (Write_Backplane_Register);
-      pragma Unreferenced (Write_Prefix_Length);
-      pragma Unreferenced (Write_Prefix);
-      pragma Unreferenced (Start_Reading_WLAN);
-      pragma Unreferenced (Start_Writing_WLAN);
-      pragma Unreferenced (Write_Backplane);
-      pragma Unreferenced (Has_Event);
-      pragma Unreferenced (Available_Packet_Length);
-      pragma Unreferenced (Is_Ready_To_Send);
-      pragma Unreferenced (Clear_Error);
-
    end Generic_Bus;
 
    generic
@@ -112,10 +101,6 @@ package SDPCM is
       with function Is_Expired (Value : Timeout) return Boolean;
    package Generic_Timeouts is
       --  Generic Timeouts Interface
-
-      pragma Unreferenced (New_Timeout);
-      pragma Unreferenced (Is_Expired);
-
    end Generic_Timeouts;
 
    type Resource_Kind is (Firmware, NVRAM, CLM_Blob);
@@ -124,20 +109,6 @@ package SDPCM is
    --  * @enum Firmware - firmware binary
    --  * @enum NVRAM - NVRAM configuration
    --  * @enum CLM_Blob - CLM blob for regulatory compliance
-
-   generic
-      with procedure Read_Resource
-        (Kind   : Resource_Kind;
-         Offset : Natural;
-         Data   : out Byte_Array;
-         Last   : out Natural);
-      --  Read resource of given kind.
-   package Generic_Resources is
-      --  Generic Resources Interface
-
-      pragma Unreferenced (Read_Resource);
-
-   end Generic_Resources;
 
    generic
       with function SSID return String;
@@ -149,11 +120,6 @@ package SDPCM is
       with function Security return SDPCM.Security_Mode;
    package Generic_Network is
       --  Generic Network Configuration Interface
-
-      pragma Unreferenced (SSID);
-      pragma Unreferenced (Password);
-      pragma Unreferenced (Security);
-
    end Generic_Network;
 
 end SDPCM;

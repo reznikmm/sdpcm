@@ -5,9 +5,18 @@
 
 generic
    with package Bus is new SDPCM.Generic_Bus (<>);
+
    with package Timeouts is new SDPCM.Generic_Timeouts (<>);
-   with package Resources is new SDPCM.Generic_Resources (<>);
+
+   with procedure Read_Resource
+     (Kind   : Resource_Kind;
+      Offset : Natural;
+      Data   : out Byte_Array;
+      Last   : out Natural);
+   --  Generic Resources Interface. Read resource of given kind.
+
    with package Network is new SDPCM.Generic_Network (<>);
+
 package SDPCM.Generic_IO is
    pragma Pure;
 
