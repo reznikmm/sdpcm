@@ -58,8 +58,8 @@ procedure Blink is
    procedure Read_Resource is new SDPCM.Generic_Mapped_Read_Resource
      (Address         => System'To_Address (16#101c0000#),
       Firmware_Length => 224256,
-      NVRAM_Length    => 988,
-      CLM_Blob_Length => 16#300#);
+      NVRAM_Length    => 16#300#,
+      CLM_Blob_Length => 988);
 
    --  Network interface implementation
    ------------------------------------

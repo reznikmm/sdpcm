@@ -68,13 +68,13 @@ package SDPCM.Generic_IO is
 private
 
    type Joining_State_Kind is
-    (Boot_Up, Idle, Joining, Joined, Failed);
+    (Boot_Up, Idle, Joining, Joined, Failed, Crashed);
 
    type Joining_State (Kind : Joining_State_Kind := Boot_Up) is record
       case Kind is
          when Boot_Up =>
-            Boot_Step : Positive := 1;
-         when Idle | Joined =>
+            null;
+         when Idle | Joined | Crashed =>
             null;
          when Joining | Failed =>
             Timeout : Timeouts.Timeout;
@@ -83,7 +83,9 @@ private
    end record;
 
    type State is limited record
-      Joining : Joining_State := (Kind => Boot_Up, Boot_Step => 1);
+      Joining : Joining_State := (Kind => Boot_Up);
+      Step    : Positive := 1;
+      Offset  : Natural := 0;
    end record;
 
 end SDPCM.Generic_IO;
