@@ -127,9 +127,10 @@ package SDPCM is
 
    generic
       with procedure Read_Resource
-        (Kind : Resource_Kind;
-         Data : out Byte_Array;
-         Last : out Natural);
+        (Kind   : Resource_Kind;
+         Offset : Natural;
+         Data   : out Byte_Array;
+         Last   : out Natural);
       --  Read resource of given kind.
    package Generic_Resources is
       --  Generic Resources Interface
