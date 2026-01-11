@@ -34,10 +34,6 @@ package SDPCM.Generic_SPI is
       Length       : Positive) return Word
      with Inline;
 
-   procedure Start_Writing_WLAN (Value : Byte_Array) is null;
-
-   procedure Start_Reading_WLAN (Value : out Byte_Array) is null;
-
    procedure Write_Backplane
      (Address : Interfaces.Unsigned_32;
       Value   : Byte_Array);
@@ -49,18 +45,5 @@ package SDPCM.Generic_SPI is
    function Is_Ready_To_Send return Boolean;
 
    procedure Clear_Error;
-
-   package Bus is new SDPCM.Generic_Bus
-     (Read_Backplane_Register  => Read_Backplane_Register,
-      Write_Backplane_Register => Write_Backplane_Register,
-      Write_Prefix_Length      => Word'Length,
-      Write_Prefix             => Write_Prefix,
-      Start_Reading_WLAN       => Start_Reading_WLAN,
-      Start_Writing_WLAN       => Start_Writing_WLAN,
-      Write_Backplane          => Write_Backplane,
-      Has_Event                => Has_Event,
-      Available_Packet_Length  => Available_Packet_Length,
-      Is_Ready_To_Send         => Is_Ready_To_Send,
-      Clear_Error              => Clear_Error);
 
 end SDPCM.Generic_SPI;

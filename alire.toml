@@ -16,7 +16,7 @@ Supported devices:
 
 [build-switches]
 development.optimization = ["-O0"]
-development.style_checks = ["-gnaty"]
+development.style_checks = ["-gnaty", "-gnaty-B"]
 development.contracts = "Yes"
 "*".debug_info = "Yes"
 

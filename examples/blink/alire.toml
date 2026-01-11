@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Max Reznik <reznikmm@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+name = "blink"
+description = "Blink WiFi LED demo"
+version = "0.1.0-dev"
+
+authors = ["Max Reznik"]
+maintainers = ["Max Reznik <reznikmm@gmail.com>"]
+maintainers-logins = ["reznikmm"]
+licenses = "Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["blink"]
+
+[build-switches]
+development.optimization = ["-O0"]
+development.style_checks = ["-gnaty", "-gnaty-B"]
+development.contracts = "Yes"
+"*".debug_info = "Yes"
+
+[[depends-on]]
+pico_bsp = "^2.2.0"
+picowi = "*"
+rp2040_hal = "*"
+sdpcm = "*"
+
+[[pins]]
+picowi = { path='../../picowi' }
+rp2040_hal = { url='https://github.com/JeremyGrosser/rp2040_hal' }
+sdpcm = { path='../..' }

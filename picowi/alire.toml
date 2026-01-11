@@ -1,0 +1,25 @@
+name = "picowi"
+description = "WiFi driver for Raspberry Pi Pico W"
+version = "0.1.0-dev"
+
+authors = ["Max Reznik"]
+maintainers = ["Max Reznik <reznikmm@gmail.com>"]
+maintainers-logins = ["reznikmm"]
+licenses = "Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = ["driver", "network", "wireless"]
+
+[build-switches]
+development.optimization = ["-O0"]
+development.style_checks = ["-gnaty", "-gnaty-B"]
+development.contracts = "Yes"
+"*".debug_info = "Yes"
+
+[[depends-on]]
+sdpcm = "*"
+rp2040_hal = "^2.5.0"
+pico_bsp = "^2.2.0"
+
+[[pins]]
+sdpcm = { path='..' }
+rp2040_hal = { url='https://github.com/JeremyGrosser/rp2040_hal' }
