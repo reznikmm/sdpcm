@@ -80,7 +80,7 @@ package body SDPCM.Generic_IO is
         (Step         : Executor.Step;
          Index        : in out Positive;
          Offset       : in out Natural;
-         Buffer       : in out Byte_Array;
+         Buffer       : in out Buffer_Byte_Array;
          Success      : in out Boolean;
          Custom_Value : Interfaces.Unsigned_32 := 0);
 
@@ -243,7 +243,12 @@ package body SDPCM.Generic_IO is
       procedure Upload_Firmware
         (Kind   : Resource_Kind;
          Offset : Natural;
-         Buffer : out Byte_Array;
+         Buffer : out Buffer_Byte_Array;
+         Value  : out Interfaces.Unsigned_32);
+
+      procedure Upload_CLM_Blob
+        (Offset : Natural;
+         Buffer : out Buffer_Byte_Array;
          Value  : out Interfaces.Unsigned_32);
 
       -------------
@@ -254,7 +259,7 @@ package body SDPCM.Generic_IO is
         (Step         : Executor.Step;
          Index        : in out Positive;
          Offset       : in out Natural;
-         Buffer       : in out Byte_Array;
+         Buffer       : in out Buffer_Byte_Array;
          Success      : in out Boolean;
          Custom_Value : Interfaces.Unsigned_32 := 0)
       is
@@ -292,7 +297,11 @@ package body SDPCM.Generic_IO is
                Bus.Clear_Error;
 
             when Upload_Firmware =>
-               Upload_Firmware (Step.Firmware, Offset, Buffer, Value);
+               if Step.Firmware in Firmware | NVRAM then
+                  Upload_Firmware (Step.Firmware, Offset, Buffer, Value);
+               else
+                  Upload_CLM_Blob (Offset, Buffer, Value);
+               end if;
 
             when Wait_Any_Event =>
                Value := Boolean'Pos (Bus.Has_Event);
@@ -334,13 +343,25 @@ package body SDPCM.Generic_IO is
       end Execute;
 
       ---------------------
+      -- Upload_CLM_Blob --
+      ---------------------
+
+      procedure Upload_CLM_Blob
+        (Offset : Natural;
+         Buffer : out Buffer_Byte_Array;
+         Value  : out Interfaces.Unsigned_32) is
+      begin
+         null;
+      end Upload_CLM_Blob;
+
+      ---------------------
       -- Upload_Firmware --
       ---------------------
 
       procedure Upload_Firmware
         (Kind   : Resource_Kind;
          Offset : Natural;
-         Buffer : out Byte_Array;
+         Buffer : out Buffer_Byte_Array;
          Value  : out Interfaces.Unsigned_32)
       is
          subtype Block_Range is Positive range
@@ -351,7 +372,7 @@ package body SDPCM.Generic_IO is
          Read_Resource
            (Kind,
             Offset,
-            Buffer (Block_Range),
+            Byte_Array (Buffer (Block_Range)),
             Last);
 
          --  Calculate write Address
@@ -389,7 +410,7 @@ package body SDPCM.Generic_IO is
 
    procedure Process
      (State  : in out SDPCM.Generic_IO.State;
-      Buffer : in out Byte_Array;
+      Buffer : in out Buffer_Byte_Array;
       Length : Natural;
       Action : out SDPCM.Generic_IO.Action)
    is

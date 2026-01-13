@@ -5,8 +5,8 @@
 
 generic
    with procedure Chip_Select (On : Boolean);
-   with procedure Read (Data : out Byte_Array);
-   with procedure Write (Data : Byte_Array);
+   with procedure Read (Data : out Buffer_Byte_Array);
+   with procedure Write (Data : Buffer_Byte_Array);
 package SDPCM.Generic_SPI is
    pragma Pure;
 
@@ -26,7 +26,7 @@ package SDPCM.Generic_SPI is
       Length  : Positive;
       Value   : Interfaces.Unsigned_32);
 
-   subtype Word is Byte_Array (1 .. 4);
+   subtype Word is Buffer_Byte_Array (1 .. 4);
 
    function Write_Prefix
      (Bus_Function : SDPCM.Bus_Function;
@@ -36,7 +36,7 @@ package SDPCM.Generic_SPI is
 
    procedure Write_Backplane
      (Address : Interfaces.Unsigned_32;
-      Value   : Byte_Array);
+      Value   : Buffer_Byte_Array);
 
    function Has_Event return Boolean;
 

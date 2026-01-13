@@ -54,7 +54,7 @@ package SDPCM.Generic_IO is
 
    procedure Process
      (State  : in out SDPCM.Generic_IO.State;
-      Buffer : in out Byte_Array;
+      Buffer : in out Buffer_Byte_Array;
       Length : Natural;
       Action : out SDPCM.Generic_IO.Action);
    --  Process IO events and change State accordingly. This procedure is not

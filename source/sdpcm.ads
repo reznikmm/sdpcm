@@ -33,6 +33,10 @@ package SDPCM is
      with Component_Size => 8;
    --  Array of bytes.
 
+   type Buffer_Byte_Array is array (Positive range <>) of Interfaces.Unsigned_8
+     with Component_Size => 8, Alignment => 4;
+   --  Array of bytes aligned on word boundary.
+
    pragma Warnings (Off, "is not referenced");
 
    generic
@@ -54,24 +58,24 @@ package SDPCM is
       with function Write_Prefix
         (Bus_Function : SDPCM.Bus_Function;
          Address      : Interfaces.Unsigned_32;
-         Length       : Positive) return Byte_Array;
+         Length       : Positive) return Buffer_Byte_Array;
       --  Create prefix for write operation. This allow bus to make a write
       --  operation in a single transaction, but user should take care of
       --  adding this prefix to the data to be written.
 
-      with procedure Start_Writing_WLAN (Value : Byte_Array);
+      with procedure Start_Writing_WLAN (Value : Buffer_Byte_Array);
       --  Start asynchronous write to WLAN function.
       --  Value should be prefixed with Write_Prefix with these parameters
       --  * Bus_Function => WLAN
       --  * Address => 0
       --  * Length => Value'Length - Write_Prefix_Length
 
-      with procedure Start_Reading_WLAN (Value : out Byte_Array);
+      with procedure Start_Reading_WLAN (Value : out Buffer_Byte_Array);
       --  Start asynchronous read from WLAN function.
 
       with procedure Write_Backplane
         (Address : Interfaces.Unsigned_32;
-         Value   : Byte_Array);
+         Value   : Buffer_Byte_Array);
       --  Write to backplane function synchronously.
       --  Value should be prefixed with Write_Prefix with these parameters
       --  * Bus_Function => Backplane

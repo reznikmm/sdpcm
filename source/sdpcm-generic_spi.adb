@@ -47,7 +47,7 @@ package body SDPCM.Generic_SPI is
      (Bus_Function : SDPCM.Bus_Function;
       Address      : Interfaces.Unsigned_32;
       Length       : Positive;
-      Value        : out Byte_Array);
+      Value        : out Buffer_Byte_Array);
 
    procedure Read_Register
      (Bus_Function : SDPCM.Bus_Function;
@@ -139,7 +139,7 @@ package body SDPCM.Generic_SPI is
              Write   => False));
 
          Result : Interfaces.Unsigned_32 := 0;
-         Bytes  : Byte_Array (1 .. 4)
+         Bytes  : Buffer_Byte_Array (1 .. 4)
            with Import, Address => Result'Address;
       begin
          Chip_Select (On => True);
@@ -200,7 +200,7 @@ package body SDPCM.Generic_SPI is
      (Bus_Function : SDPCM.Bus_Function;
       Address      : Interfaces.Unsigned_32;
       Length       : Positive;
-      Value        : out Byte_Array)
+      Value        : out Buffer_Byte_Array)
    is
       Prefix : constant gSPI_Command :=
         (Length  => Length,
@@ -242,7 +242,7 @@ package body SDPCM.Generic_SPI is
       function From_Bytes is new Ada.Unchecked_Conversion
         (Word, Interfaces.Unsigned_32);
 
-      Data : Byte_Array (1 .. 8);  --  Gap and value
+      Data : Buffer_Byte_Array (1 .. 8);  --  Gap and value
    begin
       if Bus_Function = Backplane then
          --  Backplane read requires 4 bytes gap before the value
@@ -295,7 +295,7 @@ package body SDPCM.Generic_SPI is
 
       procedure Write_Bus_Control_Register_Swapped (Bytes : Word) is
 
-         Raw : constant Byte_Array (1 .. 8) := Swap
+         Raw : constant Buffer_Byte_Array (1 .. 8) := Swap
            ((Length  => 4,
              Address => gSPI_Register.Bus_Control,
              Func    => SDPCM.Bus,
@@ -321,7 +321,7 @@ package body SDPCM.Generic_SPI is
 
    procedure Write_Backplane
      (Address : Interfaces.Unsigned_32;
-      Value   : Byte_Array)
+      Value   : Buffer_Byte_Array)
    is
       pragma Unreferenced (Address);  --  Address is embedded in Value
    begin
@@ -342,7 +342,7 @@ package body SDPCM.Generic_SPI is
       function To_Bytes is new Ada.Unchecked_Conversion
         (Interfaces.Unsigned_32, Word);
 
-      Output : constant Byte_Array (1 .. 8) :=
+      Output : constant Buffer_Byte_Array (1 .. 8) :=
         (Write_Prefix (Backplane, Address, Length) & To_Bytes (Value));
    begin
       Write_Backplane (Address, Output);
@@ -376,7 +376,7 @@ package body SDPCM.Generic_SPI is
       function To_Bytes is new Ada.Unchecked_Conversion
         (Interfaces.Unsigned_32, Word);
 
-      Output : constant Byte_Array (1 .. 8) :=
+      Output : constant Buffer_Byte_Array (1 .. 8) :=
         (Write_Prefix (SDPCM.Bus, Address, Length) & To_Bytes (Value));
    begin
       Chip_Select (On => True);

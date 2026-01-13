@@ -21,8 +21,8 @@ procedure Blink is
    --  Bus interface implementaion
    -------------------------------
 
-   procedure Start_Writing_WLAN (Value : SDPCM.Byte_Array) is null;
-   procedure Start_Reading_WLAN (Value : out SDPCM.Byte_Array) is null;
+   procedure Start_Writing_WLAN (Value : SDPCM.Buffer_Byte_Array) is null;
+   procedure Start_Reading_WLAN (Value : out SDPCM.Buffer_Byte_Array) is null;
 
    package SPI_Bus is new SDPCM.Generic_Bus
      (Read_Backplane_Register  => Picowi.PIO_SPI.gSPI.Read_Backplane_Register,
@@ -78,7 +78,7 @@ procedure Blink is
 
    Ok : Boolean;
 
-   Buffer : SDPCM.Byte_Array (1 .. 1600);
+   Buffer : SDPCM.Buffer_Byte_Array (1 .. 1600);
    State  : SDPCM_IO.State;
 begin
    RP.Clock.Initialize (Pico.XOSC_Frequency);

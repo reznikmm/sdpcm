@@ -46,7 +46,7 @@ package body Picowi.PIO_SPI is
    -- Read --
    ----------
 
-   procedure Read (Data : out SDPCM.Byte_Array) is
+   procedure Read (Data : out SDPCM.Buffer_Byte_Array) is
       Raw : HAL.UInt8_Array (Data'Range)
         with Import, Address => Data'Address;
    begin
@@ -57,7 +57,7 @@ package body Picowi.PIO_SPI is
    -- Write --
    -----------
 
-   procedure Write (Data : SDPCM.Byte_Array) is
+   procedure Write (Data : SDPCM.Buffer_Byte_Array) is
       Raw : HAL.UInt8_Array (Data'Range)
         with Import, Address => Data'Address;
    begin

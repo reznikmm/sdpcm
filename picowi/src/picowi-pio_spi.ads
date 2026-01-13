@@ -12,8 +12,8 @@ package Picowi.PIO_SPI is
    procedure Configure_PIO;  --  After Power_On and a delay
 
    procedure Chip_Select (On : Boolean);
-   procedure Read (Data : out SDPCM.Byte_Array);
-   procedure Write (Data : SDPCM.Byte_Array);
+   procedure Read (Data : out SDPCM.Buffer_Byte_Array);
+   procedure Write (Data : SDPCM.Buffer_Byte_Array);
 
    package gSPI is new SDPCM.Generic_SPI
      (Chip_Select => Chip_Select,
