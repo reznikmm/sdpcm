@@ -66,10 +66,10 @@ package body SDPCM.Generic_IO is
             when Upload_Firmware =>
                Firmware : Resource_Kind;
 
-            when Wait_Any_Event | Clear_Error =>
+            when Clear_Error =>
                null;
 
-            when Sleep =>
+            when Sleep | Wait_Any_Event =>
                Milliseconds : Natural;
          end case;
       end record;
@@ -185,42 +185,42 @@ package body SDPCM.Generic_IO is
             Address      => 16#FFFC#,  --  NVRAM size register
             Length       => 4),
          --  Reset (ARM)
-         --  5 =>
+         --  22 =>
            (Kind         => Write_Register,
             Address      => Backplane_Register.Win_Addr,
             Value        => 16#1810_0000# / 256,
             Length       => 3),
-         --  6 =>
+         --  23 =>
            (Kind         => Read_Register,
             Address      => ARM_Core_Base + AI_IOCTRL_OSET,
             Length       => 1),
-         --  7 =>
+         --  24 =>
            (Kind         => Write_Register,
             Address      => ARM_Core_Base + AI_IOCTRL_OSET,
             Value        => 3,
             Length       => 1),
-         --  8 =>
+         --  25 =>
            (Kind         => Read_Register,
             Address      => ARM_Core_Base + AI_IOCTRL_OSET,
             Length       => 1),
-         --  9 =>
+         --  26 =>
            (Kind         => Write_Register,
             Address      => ARM_Core_Base + AI_RESETCTRL_OSET,
             Value        => 0,
             Length       => 1),
-         --  10 =>
+         --  27 =>
            (Kind         => Sleep,
             Milliseconds => 1),
-         --  11 =>
+         --  28 =>
            (Kind         => Write_Register,
             Address      => ARM_Core_Base + AI_IOCTRL_OSET,
             Value        => 1,
             Length       => 1),
-         --  12 =>
+         --  29 =>
            (Kind         => Read_Register,
             Address      => ARM_Core_Base + AI_IOCTRL_OSET,
             Length       => 1),
-         --  13 =>
+         --  30 =>
            (Kind         => Sleep,
             Milliseconds => 1),
          --  end of reset
@@ -229,7 +229,10 @@ package body SDPCM.Generic_IO is
             Address      => Backplane_Register.Chip_Clock_CSR,
             Mask         => 16#80#,
             Length       => 1,
-            Trys         => 50)];
+            Trys         => 50),
+         --  32 =>
+           (Kind => Executor.Wait_Any_Event,
+            Milliseconds => 100)];
    end Executor;
 
    package body Executor is
@@ -246,11 +249,23 @@ package body SDPCM.Generic_IO is
          Success      : in out Boolean;
          Custom_Value : Interfaces.Unsigned_32 := 0)
       is
+         procedure Increment_Step;
+
          Block_Size  : constant := 64;
          Window_Size : constant := 16#8000#;
 
          subtype Block_Range is Positive range
            Bus.Write_Prefix_Length + 1 .. Bus.Write_Prefix_Length + Block_Size;
+
+         --------------------
+         -- Increment_Step --
+         --------------------
+
+         procedure Increment_Step is
+         begin
+            Index := Index + 1;
+            Offset := 0;
+         end Increment_Step;
 
          Value       : Interfaces.Unsigned_32;
          Last        : Natural;
@@ -304,6 +319,9 @@ package body SDPCM.Generic_IO is
                      Value   => Buffer (1 .. Last));
                end if;
 
+            when Wait_Any_Event =>
+               Value := Boolean'Pos (Bus.Has_Event);
+
             when others =>
                null;
          end case;
@@ -311,8 +329,7 @@ package body SDPCM.Generic_IO is
          case Step.Kind is
             when Read_Register_Until =>
                if (Value and Step.Mask) /= 0 then
-                  Index := Index + 1;
-                  Offset := 0;
+                  Increment_Step;
                elsif Offset < Step.Trys then
                   Offset := Offset + 1;
                else
@@ -321,15 +338,22 @@ package body SDPCM.Generic_IO is
 
             when Upload_Firmware =>
                if Last < Block_Range'Last then
-                  Index := Index + 1;
-                  Offset := 0;
+                  Increment_Step;
                else
                   Offset := Offset + Block_Size;
                end if;
 
+            when Wait_Any_Event =>
+               if Value = 1 then
+                  Increment_Step;
+               elsif Offset < Step.Milliseconds then
+                  Offset := Offset + 1;
+               else
+                  Success := False;
+               end if;
+
             when others =>
-               Index := Index + 1;
-               Offset := 0;
+               Increment_Step;
          end case;
       end Execute;
 
@@ -350,9 +374,10 @@ package body SDPCM.Generic_IO is
           (case Step.Kind is
               when Executor.Sleep =>
                 (Sleep, Milliseconds => Step.Milliseconds),
-              when Executor.Read_Register_Until =>
-                (if State.Offset = 0 then (Kind => Continue)
-                 else (Sleep, Milliseconds => 1)),
+              when Executor.Read_Register_Until
+                | Executor.Wait_Any_Event =>
+                  (if State.Offset = 0 then (Kind => Continue)
+                   else (Sleep, Milliseconds => 1)),
               when others =>
                 (Kind => Continue));
 
