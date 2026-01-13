@@ -237,6 +237,15 @@ package body SDPCM.Generic_IO is
 
    package body Executor is
 
+      Block_Size  : constant := 64;
+      Window_Size : constant := 16#8000#;
+
+      procedure Upload_Firmware
+        (Kind   : Resource_Kind;
+         Offset : Natural;
+         Buffer : out Byte_Array;
+         Value  : out Interfaces.Unsigned_32);
+
       -------------
       -- Execute --
       -------------
@@ -251,12 +260,6 @@ package body SDPCM.Generic_IO is
       is
          procedure Increment_Step;
 
-         Block_Size  : constant := 64;
-         Window_Size : constant := 16#8000#;
-
-         subtype Block_Range is Positive range
-           Bus.Write_Prefix_Length + 1 .. Bus.Write_Prefix_Length + Block_Size;
-
          --------------------
          -- Increment_Step --
          --------------------
@@ -268,7 +271,7 @@ package body SDPCM.Generic_IO is
          end Increment_Step;
 
          Value       : Interfaces.Unsigned_32;
-         Last        : Natural;
+
       begin
          case Step.Kind is
             when Write_Register =>
@@ -289,35 +292,7 @@ package body SDPCM.Generic_IO is
                Bus.Clear_Error;
 
             when Upload_Firmware =>
-               Read_Resource
-                 (Step.Firmware,
-                  Offset,
-                  Buffer (Block_Range),
-                  Last);
-
-               --  Calculate write Address
-               Value := (if Step.Firmware = Firmware then 0 else 16#7_FCFC#) +
-                 Interfaces.Unsigned_32 (Offset);
-
-               if Last in Block_Range then
-                  Buffer (1 .. Bus.Write_Prefix_Length) := Bus.Write_Prefix
-                    (Bus_Function => SDPCM.Backplane,
-                     Address      => Value mod Window_Size,
-                     Length       => Last - Bus.Write_Prefix_Length);
-
-                  if Offset = 0 or
-                    (Value - 1) / Window_Size /= Value / Window_Size
-                  then
-                     Bus.Write_Backplane_Register
-                       (Address      => Backplane_Register.Win_Addr,
-                        Value        => Value / 256,
-                        Length       => 3);
-                  end if;
-
-                  Bus.Write_Backplane
-                    (Address => Value,
-                     Value   => Buffer (1 .. Last));
-               end if;
+               Upload_Firmware (Step.Firmware, Offset, Buffer, Value);
 
             when Wait_Any_Event =>
                Value := Boolean'Pos (Bus.Has_Event);
@@ -337,7 +312,8 @@ package body SDPCM.Generic_IO is
                end if;
 
             when Upload_Firmware =>
-               if Last < Block_Range'Last then
+               --  if Last < Block_Range'Last then
+               if Value = 1 then
                   Increment_Step;
                else
                   Offset := Offset + Block_Size;
@@ -356,6 +332,54 @@ package body SDPCM.Generic_IO is
                Increment_Step;
          end case;
       end Execute;
+
+      ---------------------
+      -- Upload_Firmware --
+      ---------------------
+
+      procedure Upload_Firmware
+        (Kind   : Resource_Kind;
+         Offset : Natural;
+         Buffer : out Byte_Array;
+         Value  : out Interfaces.Unsigned_32)
+      is
+         subtype Block_Range is Positive range
+           Bus.Write_Prefix_Length + 1 .. Bus.Write_Prefix_Length + Block_Size;
+
+         Last : Natural;
+      begin
+         Read_Resource
+           (Kind,
+            Offset,
+            Buffer (Block_Range),
+            Last);
+
+         --  Calculate write Address
+         Value := (if Kind = Firmware then 0 else 16#7_FCFC#) +
+           Interfaces.Unsigned_32 (Offset);
+
+         if Last in Block_Range then
+            Buffer (1 .. Bus.Write_Prefix_Length) := Bus.Write_Prefix
+              (Bus_Function => SDPCM.Backplane,
+               Address      => Value mod Window_Size,
+               Length       => Last - Bus.Write_Prefix_Length);
+
+            if Offset = 0 or
+              (Value - 1) / Window_Size /= Value / Window_Size
+            then
+               Bus.Write_Backplane_Register
+                 (Address      => Backplane_Register.Win_Addr,
+                  Value        => Value / 256,
+                  Length       => 3);
+            end if;
+
+            Bus.Write_Backplane
+              (Address => Value,
+               Value   => Buffer (1 .. Last));
+         end if;
+
+         Value := (if Last < Block_Range'Last then 1 else 0);
+      end Upload_Firmware;
 
    end Executor;
 
