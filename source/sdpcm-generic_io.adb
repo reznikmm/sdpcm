@@ -28,6 +28,7 @@ package body SDPCM.Generic_IO is
    package IOCTL is
       type Command is new Interfaces.Unsigned_32;
 
+      GET_VAR      : constant Command := 262;
       SET_VAR      : constant Command := 263;
 
       procedure Set
@@ -38,7 +39,8 @@ package body SDPCM.Generic_IO is
 
       procedure Set_In_Place
         (Buffer  : in out Buffer_Byte_Array;
-         Command : IOCTL.Command);
+         Command : IOCTL.Command;
+         Write   : Boolean);
 
       function Data_Offset return Positive;
 
@@ -57,6 +59,14 @@ package body SDPCM.Generic_IO is
          Flags      at 8 range 0 .. 31;
          Status     at 12 range 0 .. 31;
       end record;
+
+      type IO_Variable is
+        (cur_etheraddr);
+
+      function To_Name (Value : IO_Variable) return String is
+        (case Value is
+            when cur_etheraddr => "cur_etheraddr")
+           with Static;
 
    end IOCTL;
 
@@ -135,6 +145,7 @@ package body SDPCM.Generic_IO is
          Read_Register_Until,
          Upload_Firmware,
          Upload_CLM,
+         IOCTL_Get,
          Wait_Any_Event,
          Clear_Error,
          Sleep);
@@ -162,6 +173,7 @@ package body SDPCM.Generic_IO is
 
                   when Upload_CLM
                      | Upload_Firmware
+                     | IOCTL_Get
                      | Wait_Any_Event
                      | Clear_Error
                      | Sleep
@@ -174,6 +186,9 @@ package body SDPCM.Generic_IO is
 
             when Upload_CLM | Clear_Error =>
                null;
+
+            when IOCTL_Get =>
+               Variable : IOCTL.IO_Variable;
 
             when Sleep | Wait_Any_Event =>
                Milliseconds : Natural;
@@ -356,7 +371,10 @@ package body SDPCM.Generic_IO is
            (Kind         => Write_Register,
             Address      => Backplane_Register.GPIO_Out,
             Value        => 1,
-            Length       => 4)
+            Length       => 4),
+         --  37 =>
+           (Kind         => IOCTL_Get,
+            Variable     => IOCTL.cur_etheraddr)
           ];
    end Executor;
 
@@ -411,7 +429,7 @@ package body SDPCM.Generic_IO is
          Buffer (First + Name'Length .. First + Name'Length + Data'Length - 1)
            := Buffer_Byte_Array (Data);
 
-         Set_In_Place (Buffer (1 .. Last), Command);
+         Set_In_Place (Buffer (1 .. Last), Command, Write => True);
       end Set;
 
       ------------------
@@ -420,7 +438,8 @@ package body SDPCM.Generic_IO is
 
       procedure Set_In_Place
         (Buffer  : in out Buffer_Byte_Array;
-         Command : IOCTL.Command)
+         Command : IOCTL.Command;
+         Write   : Boolean)
       is
          use type Interfaces.Unsigned_8;
          use type Interfaces.Unsigned_16;
@@ -469,7 +488,9 @@ package body SDPCM.Generic_IO is
                Out_Length => Out_Length,
                In_Length  => 0,
                Flags      =>
-                 Interfaces.Unsigned_32 (TX_Request) * 2**16 + 2,
+                 (if Write
+                  then Interfaces.Unsigned_32 (TX_Request) * 2**16 + 2
+                  else 0),
                Status     => 0));
 
          Bus.Start_Writing_WLAN (Buffer);
@@ -492,6 +513,12 @@ package body SDPCM.Generic_IO is
         (Offset  : in out Natural;
          Buffer  : out Buffer_Byte_Array;
          Command : out IOCTL.Command);
+
+      procedure IOCTL_Get
+        (Variable : IOCTL.IO_Variable;
+         Offset   : in out Natural;
+         Buffer   : out Buffer_Byte_Array;
+         Command  : in out IOCTL.Command);
 
       -------------
       -- Execute --
@@ -545,6 +572,9 @@ package body SDPCM.Generic_IO is
             when Upload_CLM =>
                Upload_CLM_Blob (Offset, Buffer, Command);
 
+            when IOCTL_Get =>
+               IOCTL_Get (Step.Variable, Offset, Buffer, Command);
+
             when Wait_Any_Event =>
                Value := Boolean'Pos (Bus.Has_Event);
 
@@ -562,7 +592,7 @@ package body SDPCM.Generic_IO is
                   Success := False;
                end if;
 
-            when Upload_Firmware | Upload_CLM =>
+            when Upload_Firmware | Upload_CLM | IOCTL_Get =>
                if Offset = 0 then
                   Increment_Step;
                end if;
@@ -580,6 +610,35 @@ package body SDPCM.Generic_IO is
                Increment_Step;
          end case;
       end Execute;
+
+      ---------------
+      -- IOCTL_Get --
+      ---------------
+
+      procedure IOCTL_Get
+        (Variable : IOCTL.IO_Variable;
+         Offset   : in out Natural;
+         Buffer   : out Buffer_Byte_Array;
+         Command  : in out IOCTL.Command)
+      is
+         From : Positive := IOCTL.Data_Offset;
+         Name : constant String :=
+           IOCTL.To_Name (Variable) & Character'Val (0);
+         To   : Positive := From + (Name'Length + 3)/ 4 * 4 - 1;
+      begin
+         if Offset = 0 then
+            for Index in Name'Range loop
+               Buffer (From + Index - 1) := Character'Pos (Name (Index));
+            end loop;
+
+            Command := IOCTL.GET_VAR;
+            Offset := 1;
+
+            IOCTL.Set_In_Place (Buffer (1 .. To), Command, Write => False);
+         else
+            Offset := 0;
+         end if;
+      end IOCTL_Get;
 
       ---------------------
       -- Upload_CLM_Blob --
@@ -642,7 +701,7 @@ package body SDPCM.Generic_IO is
                 Crc  => 0));
 
             Command := IOCTL.SET_VAR;
-            IOCTL.Set_In_Place (Buffer (1 .. Last), Command);
+            IOCTL.Set_In_Place (Buffer (1 .. Last), Command, Write => True);
 
             Offset := (if Last = To then Offset + Load_Size else Natural'Last);
          else
@@ -831,8 +890,24 @@ package body SDPCM.Generic_IO is
 
       SDPCM.Decode_Input (Buffer, Got);
 
-      if Got.Channel = SDPCM.Control then
-         Found := Got.IOCTL_Header.Command = IOCTL.Command (State.Command);
+      if Got.Channel /= SDPCM.Control then
+         Found := False;
+      elsif Got.IOCTL_Header.Command = IOCTL.Command (State.Command) then
+         Found := True;
+
+         if Got.IOCTL_Header.Command = IOCTL.GET_VAR then
+            declare
+               From : constant Natural := Got.IOCTL_Offset;
+               Size : constant Natural := Buffer'Last - From + 1;
+            begin
+               if Size >= State.MAC'Length then
+                  State.MAC := Byte_Array
+                    (Buffer (From .. From + State.MAC'Length - 1));
+               else
+                  raise Program_Error;
+               end if;
+            end;
+         end if;
       else
          Found := False;
       end if;
@@ -857,7 +932,8 @@ package body SDPCM.Generic_IO is
                 | Executor.Wait_Any_Event =>
                   (if State.Offset = 0 then (Kind => Continue)
                    else (Sleep, Milliseconds => 1)),
-              when Executor.Upload_CLM =>
+              when Executor.Upload_CLM
+                | Executor.IOCTL_Get =>
                 (if State.Offset = 0 then (Kind => Continue)
                  else (Kind => Complete_IO)),
               when others =>
@@ -866,6 +942,7 @@ package body SDPCM.Generic_IO is
       function Need_Reading return Boolean is
          (case Executor.Start (State.Step).Kind is
              when Executor.Upload_CLM => State.Offset > 0,
+             when Executor.IOCTL_Get => State.Offset = 1,
              when others => False);
 
       Ok : Boolean := False;

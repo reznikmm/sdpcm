@@ -88,6 +88,7 @@ private
       Offset  : Natural := 0;
       Command : Interfaces.Unsigned_32 := 0;
       Reading : Natural := 0;
+      MAC     : Byte_Array (1 .. 6);
    end record;
 
 end SDPCM.Generic_IO;
