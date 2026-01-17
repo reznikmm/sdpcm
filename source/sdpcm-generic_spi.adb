@@ -254,6 +254,19 @@ package body SDPCM.Generic_SPI is
       end if;
    end Read_Register;
 
+   ---------------
+   -- Read_WLAN --
+   ---------------
+
+   procedure Read_WLAN (Value : out Buffer_Byte_Array) is
+   begin
+      Read
+        (Bus_Function => SDPCM.WLAN,
+         Address      => 0,
+         Length       => Value'Length,
+         Value        => Value);
+   end Read_WLAN;
+
    ----------
    -- Swap --
    ----------
@@ -329,6 +342,17 @@ package body SDPCM.Generic_SPI is
       Write (Value);
       Chip_Select (On => False);
    end Write_Backplane;
+
+   ----------------
+   -- Write_WLAN --
+   ----------------
+
+   procedure Write_WLAN (Value : Buffer_Byte_Array) is
+   begin
+      Chip_Select (On => True);
+      Write (Value);
+      Chip_Select (On => False);
+   end Write_WLAN;
 
    ------------------------------
    -- Write_Backplane_Register --

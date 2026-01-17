@@ -38,6 +38,10 @@ package SDPCM.Generic_SPI is
      (Address : Interfaces.Unsigned_32;
       Value   : Buffer_Byte_Array);
 
+   procedure Write_WLAN (Value : Buffer_Byte_Array);
+
+   procedure Read_WLAN (Value : out Buffer_Byte_Array);
+
    function Has_Event return Boolean;
 
    function Available_Packet_Length return Interfaces.Unsigned_32;

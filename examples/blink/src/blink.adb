@@ -3,6 +3,8 @@
 --  SPDX-License-Identifier: MIT
 ----------------------------------------------------------------
 
+pragma Ada_2022;
+
 with RP.Timer;
 with System;
 
@@ -21,16 +23,13 @@ procedure Blink is
    --  Bus interface implementaion
    -------------------------------
 
-   procedure Start_Writing_WLAN (Value : SDPCM.Buffer_Byte_Array) is null;
-   procedure Start_Reading_WLAN (Value : out SDPCM.Buffer_Byte_Array) is null;
-
    package SPI_Bus is new SDPCM.Generic_Bus
      (Read_Backplane_Register  => Picowi.PIO_SPI.gSPI.Read_Backplane_Register,
       Write_Backplane_Register => Picowi.PIO_SPI.gSPI.Write_Backplane_Register,
       Write_Prefix_Length      => Picowi.PIO_SPI.gSPI.Word'Length,
       Write_Prefix             => Picowi.PIO_SPI.gSPI.Write_Prefix,
-      Start_Writing_WLAN       => Start_Writing_WLAN,
-      Start_Reading_WLAN       => Start_Reading_WLAN,
+      Start_Writing_WLAN       => Picowi.PIO_SPI.gSPI.Write_WLAN,
+      Start_Reading_WLAN       => Picowi.PIO_SPI.gSPI.Read_WLAN,
       Write_Backplane          => Picowi.PIO_SPI.gSPI.Write_Backplane,
       Has_Event                => Picowi.PIO_SPI.gSPI.Has_Event,
       Available_Packet_Length  => Picowi.PIO_SPI.gSPI.Available_Packet_Length,
@@ -115,7 +114,7 @@ begin
             when SDPCM_IO.Sleep =>
                RP.Device.Timer.Delay_Milliseconds (Action.Milliseconds);
             when SDPCM_IO.Complete_IO =>
-               raise Program_Error;
+               null;  --  We use synchronous I/O in this demo. Do nothing
             when SDPCM_IO.Process_Packet =>
                null;
          end case;

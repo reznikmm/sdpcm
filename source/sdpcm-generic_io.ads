@@ -18,7 +18,7 @@ generic
    with package Network is new SDPCM.Generic_Network (<>);
 
 package SDPCM.Generic_IO is
-   pragma Pure;
+   pragma Preelaborate;
 
    type State is limited private
      with Preelaborable_Initialization;
@@ -86,6 +86,8 @@ private
       Joining : Joining_State := (Kind => Boot_Up);
       Step    : Positive := 1;
       Offset  : Natural := 0;
+      Command : Interfaces.Unsigned_32 := 0;
+      Reading : Natural := 0;
    end record;
 
 end SDPCM.Generic_IO;
