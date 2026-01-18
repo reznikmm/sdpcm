@@ -6,6 +6,10 @@
 pragma Ada_2022;
 with Ada.Unchecked_Conversion;
 
+with SDPCM.Events;
+with SDPCM.IOCTL;
+with SDPCM.Packets;
+
 package body SDPCM.Generic_IO is
    use type Interfaces.Unsigned_16;
    use type Interfaces.Unsigned_32;
@@ -19,226 +23,19 @@ package body SDPCM.Generic_IO is
       GPIO_Out       : constant := 16#8064#;
    end Backplane_Register;
 
+   procedure IOCTL_Set_In_Place is new IOCTL.Set_In_Place (Bus);
+
+   function IOCTL_Data_Offset return Natural is
+     (IOCTL.Data_Offset (Bus.Write_Prefix_Length));
+
+   procedure IOCTL_Set is new IOCTL.Set
+     (IOCTL_Data_Offset, IOCTL_Set_In_Place);
+
    subtype Frame_Tag is Interfaces.Unsigned_32;
 
    function Make_Tag (Length : Interfaces.Unsigned_16) return Frame_Tag is
      (Interfaces.Shift_Left (Interfaces.Unsigned_32 (not Length), 16) +
       Interfaces.Unsigned_32 (Length));
-
-   package Events is
-
-      type Event is new Interfaces.Unsigned_8;
-
-      JOIN          : constant Event := 1;
-      ASSOC         : constant Event := 7;
-      REASSOC       : constant Event := 9;
-      ASSOC_REQ_IE  : constant Event := 87;
-      ASSOC_RESP_IE : constant Event := 88;
-      SET_SSID      : constant Event := 0;
-      LINK          : constant Event := 16;
-      AUTH          : constant Event := 3;
-      PSK_SUP       : constant Event := 46;
-      EAPOL_MSG     : constant Event := 25;
-      DISASSOC_IND  : constant Event := 12;
-
-      Last_Event : constant Event := 208;
-
-      type Event_Mask is array (Event range 0 .. Last_Event) of Boolean
-        with Pack, Alignment => 1;
-
-      type Event_Array is array (Positive range <>) of Event;
-
-      Join_Events : constant Event_Array :=
-        [JOIN,
-         ASSOC,
-         REASSOC,
-         ASSOC_REQ_IE,
-         ASSOC_RESP_IE,
-         SET_SSID,
-         LINK,
-         AUTH,
-         PSK_SUP,
-         EAPOL_MSG,
-         DISASSOC_IND];
-
-      function To_Mask (List : Event_Array) return Event_Mask;
-
-      subtype Raw_Event_Mask is Byte_Array (1 .. Event_Mask'Size / 8 + 4);
-
-      function To_Raw_Event_Mask (Mask : Event_Mask) return Raw_Event_Mask;
-
-   end Events;
-
-   package IOCTL is
-      type Command is new Interfaces.Unsigned_32;
-
-      UP           : constant Command := 2;
-      DOWN         : constant Command := 3;
-      SET_INFRA    : constant Command := 20;
-      SET_AUTH     : constant Command := 22;
-      SET_SSID     : constant Command := 26;
-      SET_ANTDIV   : constant Command := 64;
-      SET_GMODE    : constant Command := 110;
-      SET_WSEC     : constant Command := 134;
-      SET_BAND     : constant Command := 142;
-      SET_WPA_AUTH : constant Command := 165;
-      GET_VAR      : constant Command := 262;
-      SET_VAR      : constant Command := 263;
-      SET_WSEC_PMK : constant Command := 268;
-
-      procedure Set
-        (Buffer  : in out Buffer_Byte_Array;
-         Command : IOCTL.Command;
-         Name    : Byte_Array;
-         Data    : Byte_Array;
-         Write   : Boolean);
-
-      procedure Set_In_Place
-        (Buffer  : in out Buffer_Byte_Array;
-         Command : IOCTL.Command;
-         Write   : Boolean);
-
-      function Data_Offset return Positive;
-
-      type IOCTL_Header is record
-         Command    : IOCTL.Command;
-         Out_Length : Interfaces.Unsigned_16;
-         In_Length  : Interfaces.Unsigned_16;
-         Flags      : Interfaces.Unsigned_32;
-         Status     : Interfaces.Unsigned_32;
-      end record;
-
-      for IOCTL_Header use record
-         Command    at 0 range 0 .. 31;
-         Out_Length at 4 range 0 .. 15;
-         In_Length  at 6 range 0 .. 15;
-         Flags      at 8 range 0 .. 31;
-         Status     at 12 range 0 .. 31;
-      end record;
-
-      type IO_Variable is
-        (None,
-         country,
-         bus_txglom,
-         apsta,
-         ampdu_ba_wsize,
-         ampdu_mpdu,
-         ampdu_rx_factor,
-         bsscfg_event_msgs,
-         mcast_list,
-         cur_etheraddr);
-
-      subtype Output_Variable is IO_Variable
-        range country .. mcast_list;
-
-      function To_Name (Name : IO_Variable) return String is
-        (case Name is
-            when None              => "",
-            when country           => "country",
-            when cur_etheraddr     => "cur_etheraddr",
-            when bus_txglom        => "bus:txglom",
-            when apsta             => "apsta",
-            when ampdu_ba_wsize    => "ampdu_ba_wsize",
-            when ampdu_mpdu        => "ampdu_mpdu",
-            when ampdu_rx_factor   => "ampdu_rx_factor",
-            when bsscfg_event_msgs => "bsscfg:event_msgs",
-            when mcast_list        => "mcast_list")
-           with Static;
-
-      function To_Raw_Name (Name : IO_Variable) return Byte_Array is
-        (if Name = None then []
-         else [for X of To_Name (Name) => Character'Pos (X), 0]);
-
-      XX_Country : constant Byte_Array (1 .. 20) :=
-        [16#58#, 16#58#, 16#00#, 16#00#, 16#FF#, 16#FF#, 16#FF#, 16#FF#,
-         16#58#, 16#58#, others => 16#00#];
-      --  "XX\x00\x00\xFF\xFF\xFF\xFFXX"
-
-      Multicast_List : constant Byte_Array (1 .. 6 * 10) :=
-        [1, 0, 0, 0,
-         16#01#, 16#00#, 16#5E#, 16#00#, 16#00#, 16#FB#,
-         others => 0];
-
-      function Raw_Value
-        (Name    : Output_Variable;
-         Command : IOCTL.Command) return Byte_Array is
-        (case Command is
-            when others =>
-           (case Name is
-               when country           => XX_Country,
-               when bsscfg_event_msgs =>
-                  Events.To_Raw_Event_Mask
-                    (Events.To_Mask (Events.Join_Events)),
-               when mcast_list => Multicast_List,
-               when others            => raise Program_Error));
-
-   end IOCTL;
-
-   package SDPCM is
-      type BDC_Header is record
-         Flags    : Interfaces.Unsigned_8;
-         Priority : Interfaces.Unsigned_8;
-         Flags2   : Interfaces.Unsigned_8;
-         Offset   : Natural range 0 .. 255;
-      end record;
-
-      for BDC_Header use record
-         Flags    at 0 range 0 .. 7;
-         Priority at 1 range 0 .. 7;
-         Flags2   at 2 range 0 .. 7;
-         Offset   at 3 range 0 .. 7;
-      end record;
-
-      function Is_Valid (Tag : Frame_Tag) return Boolean is
-        (((Interfaces.Shift_Right (Tag, 16) xor Tag) and 16#FFFF#) = 16#FFFF#);
-
-      type SDPCM_Channel is new Interfaces.Unsigned_8;
-
-      Control : constant SDPCM_Channel := 0;
-      Event   : constant SDPCM_Channel := 1;
-      Data    : constant SDPCM_Channel := 2;
-
-      subtype Event_Or_Data is SDPCM_Channel range Event .. Data;
-
-      type SDPCM_Header is record
-         Tag      : Frame_Tag;
-         Sequence : Interfaces.Unsigned_8;
-         Channel  : SDPCM_Channel;
-         Next_Len : Interfaces.Unsigned_8;
-         Hdr_Len  : Natural range 0 .. 255;  --  SDPCM header plus any padding
-         Flow     : Interfaces.Unsigned_8;
-         Credit   : Interfaces.Unsigned_8;
-         Reserved : Interfaces.Unsigned_16;
-      end record;
-
-      for SDPCM_Header use record
-         Tag      at 0 range 0 .. 31;
-         Sequence at 4 range 0 .. 7;
-         Channel  at 5 range 0 .. 7;
-         Next_Len at 6 range 0 .. 7;
-         Hdr_Len  at 7 range 0 .. 7;
-         Flow     at 8 range 0 .. 7;
-         Credit   at 9 range 0 .. 7;
-         Reserved at 10 range 0 .. 15;
-      end record;
-
-      type Packet (Channel : SDPCM_Channel := 0) is record
-         case Channel is
-            when Control =>
-               IOCTL_Header : IOCTL.IOCTL_Header;
-               IOCTL_Offset : Natural;
-            when Event | Data =>
-               Offset       : Natural;
-            when others =>
-               null;
-         end case;
-      end record;
-
-      procedure Decode_Input
-        (Input  : Buffer_Byte_Array;
-         Result : out Packet);
-
-   end SDPCM;
 
    package Executor is
 
@@ -575,155 +372,6 @@ package body SDPCM.Generic_IO is
           ];
    end Executor;
 
-   package body IOCTL is
-
-      TX_Sequence : Interfaces.Unsigned_8 := 0;
-      TX_Request  : Interfaces.Unsigned_16 := 0;
-
-      function Data_Offset return Positive is
-         type Header is record
-            S : SDPCM.SDPCM_Header;
-            I : IOCTL_Header;
-            D : Interfaces.Unsigned_8;
-         end record
-           with Pack;
-
-         Dummy : constant Header :=
-           (S => (others => <>),
-            I => (others => <>),
-            D => 0);
-
-      begin
-         return 1 + Dummy.D'Position + Bus.Write_Prefix_Length;
-      end Data_Offset;
-
-      ---------
-      -- Set --
-      ---------
-
-      procedure Set
-        (Buffer  : in out Buffer_Byte_Array;
-         Command : IOCTL.Command;
-         Name    : Byte_Array;
-         Data    : Byte_Array;
-         Write   : Boolean)
-      is
-         First : constant Positive := Data_Offset;
-         Last  : constant Positive := First +
-           (Name'Length + Data'Length + 3) / 4 * 4 - 1;
-      begin
-         Buffer (First .. First + Name'Length - 1) := Buffer_Byte_Array (Name);
-
-         Buffer (First + Name'Length .. First + Name'Length + Data'Length - 1)
-           := Buffer_Byte_Array (Data);
-
-         for J in First + Name'Length + Data'Length .. Last loop
-            Buffer (J) := 0;
-         end loop;
-
-         Set_In_Place (Buffer (1 .. Last), Command, Write);
-      end Set;
-
-      ------------------
-      -- Set_In_Place --
-      ------------------
-
-      procedure Set_In_Place
-        (Buffer  : in out Buffer_Byte_Array;
-         Command : IOCTL.Command;
-         Write   : Boolean)
-      is
-         use type Interfaces.Unsigned_8;
-
-         type Output_Command is record
-            Prefix  : Buffer_Byte_Array (1 .. Bus.Write_Prefix_Length);
-            SDPCM   : Generic_IO.SDPCM.SDPCM_Header;
-            IOCTL   : IOCTL_Header;
-         end record
-           with Pack;
-
-         First : constant Positive := Data_Offset;
-         Last  : constant Positive := Buffer'Last;
-
-         Out_Length : constant Interfaces.Unsigned_16 :=
-           Interfaces.Unsigned_16 (Last - First + 1 + 3) / 4 * 4;
-
-         Output : Output_Command
-           with Import, Address => Buffer'Address;
-
-      begin
-         TX_Sequence := TX_Sequence + 1;
-         TX_Request := Interfaces.Unsigned_16'Succ (TX_Request);
-
-         Output :=
-           (Prefix => Bus.Write_Prefix
-              (Bus_Function => WLAN,
-               Address      => 0,
-               Length       => Buffer'Length - Bus.Write_Prefix_Length),
-            SDPCM  =>
-              (Tag      =>
-                 Make_Tag
-                   (Interfaces.Unsigned_16
-                     (Buffer'Length - Bus.Write_Prefix_Length)),
-               Sequence => TX_Sequence,
-               Channel  => SDPCM.Control,
-               Next_Len => 0,
-               Hdr_Len  => SDPCM.SDPCM_Header'Size / 8,
-               Flow     => 0,
-               Credit   => 0,
-               Reserved => 0),
-            IOCTL  =>
-              (Command    => Command,
-               Out_Length => Out_Length,
-               In_Length  => 0,
-               Flags      =>
-                 (if Write
-                  then Interfaces.Unsigned_32 (TX_Request) * 2**16 + 2
-                  else 0),
-               Status     => 0));
-
-         Bus.Start_Writing_WLAN (Buffer);
-      end Set_In_Place;
-
-   end IOCTL;
-
-   ------------
-   -- Events --
-   ------------
-
-   package body Events is
-
-      -------------
-      -- To_Mask --
-      -------------
-
-      function To_Mask (List : Event_Array) return Event_Mask is
-         Mask : Event_Mask := [others => False];
-      begin
-         for Event of List loop
-            Mask (Event) := True;
-         end loop;
-
-         return Mask;
-      end To_Mask;
-
-      -----------------------
-      -- To_Raw_Event_Mask --
-      -----------------------
-
-      function To_Raw_Event_Mask (Mask : Event_Mask) return Raw_Event_Mask is
-         Raw : Raw_Event_Mask := [others => 0];
-
-         Copy : Event_Mask
-           with Import, Address => Raw (5)'Address;
-      begin
-         Copy := Mask;
-
-         return Raw;
-      end To_Raw_Event_Mask;
-
-   end Events;
-
    --------------
    -- Executor --
    --------------
@@ -884,7 +532,7 @@ package body SDPCM.Generic_IO is
          if Offset = 0 then
             Offset := 1;
 
-            IOCTL.Set (Buffer, Command, Name, [], Write => False);
+            IOCTL_Set (Buffer, Command, Name, [], Write => False);
          else
             Offset := 0;
          end if;
@@ -906,7 +554,7 @@ package body SDPCM.Generic_IO is
          if Offset = 0 then
             Offset := 1;
 
-            IOCTL.Set (Buffer, Command, Name, Raw, Write => True);
+            IOCTL_Set (Buffer, Command, Name, Raw, Write => True);
          else
             Offset := 0;
          end if;
@@ -933,7 +581,7 @@ package body SDPCM.Generic_IO is
          if Offset = 0 then
             Offset := 1;
 
-            IOCTL.Set (Buffer, Command, Name, Raw, Write => True);
+            IOCTL_Set (Buffer, Command, Name, Raw, Write => True);
          else
             Offset := 0;
          end if;
@@ -972,7 +620,7 @@ package body SDPCM.Generic_IO is
 
          NUL : constant Character := Character'Val (0);
 
-         Name : constant Positive := IOCTL.Data_Offset;
+         Name : constant Positive := IOCTL_Data_Offset;
          Data : constant Positive := Name + Raw_Request'Length;
          To   : constant Positive := Data + Load_Size - 1;
          Last : Natural := 0;
@@ -1000,7 +648,7 @@ package body SDPCM.Generic_IO is
                 Crc  => 0));
 
             Command := IOCTL.SET_VAR;
-            IOCTL.Set_In_Place (Buffer (1 .. Last), Command, Write => True);
+            IOCTL_Set_In_Place (Buffer (1 .. Last), Command, Write => True);
 
             Offset := (if Last = To then Offset + Load_Size else Natural'Last);
          else
@@ -1061,116 +709,6 @@ package body SDPCM.Generic_IO is
 
    end Executor;
 
-   -----------
-   -- SDPCM --
-   -----------
-
-   package body SDPCM is
-
-      ------------------
-      -- Decode_Input --
-      ------------------
-
-      procedure Decode_Input
-        (Input  : Buffer_Byte_Array;
-         Result : out Packet)
-      is
-         subtype IOCTL_Header_Raw is
-           Buffer_Byte_Array (1 .. IOCTL.IOCTL_Header'Size / 8);
-
-         function To_IOCTL_Header is new Ada.Unchecked_Conversion
-           (IOCTL_Header_Raw, IOCTL.IOCTL_Header);
-
-         subtype BDC_Header_Raw is
-           Buffer_Byte_Array (1 .. BDC_Header'Size / 8);
-
-         function To_BDC_Header is new Ada.Unchecked_Conversion
-           (BDC_Header_Raw, BDC_Header);
-
-         SDPCM : SDPCM_Header
-           with Import, Address => Input'Address;
-      begin
-         if not Is_Valid (SDPCM.Tag) or else
-           (SDPCM.Channel = Control and then
-            Input'Last < SDPCM.Hdr_Len + IOCTL.IOCTL_Header'Size / 8)
-           or else
-           (SDPCM.Channel in Event | Data and then
-            Input'Last < SDPCM.Hdr_Len + BDC_Header'Size / 8)
-         then
-            Result := (Channel => SDPCM_Channel'Last);
-         elsif SDPCM.Channel = Control then
-            declare
-               Skip : constant Natural := SDPCM.Hdr_Len;
-
-               Header : constant IOCTL.IOCTL_Header := To_IOCTL_Header
-                 (Input (Skip + 1 .. Skip + IOCTL.IOCTL_Header'Size / 8));
-
-               Header_Length : constant Positive :=
-                 Skip + IOCTL.IOCTL_Header'Size / 8;
-
-            begin
-               Result := (Control, Header, Header_Length + 1);
-            end;
-         elsif SDPCM.Channel in Event .. Data then
-            declare
-               Skip : constant Natural := SDPCM.Hdr_Len;
-
-               BDC : constant BDC_Header := To_BDC_Header
-                 (Input (Skip + 1 .. Skip + BDC_Header'Size / 8));
-
-               Header_Length : constant Positive :=
-                 Skip + BDC'Size / 8 + 4 * BDC.Offset;
-
-            begin
-               if Input'Last >= Header_Length + 1 then
-                  Result :=
-                    (Channel => Event_Or_Data (SDPCM.Channel),
-                     Offset  => Header_Length + 1);
-               end if;
-            end;
-         end if;
-      end Decode_Input;
-
-      type ETHER_HDR is record
-         Dest_Addr : Byte_Array (1 .. 6);
-         Srce_Addr : Byte_Array (1 .. 6);
-         Tipe      : Interfaces.Unsigned_16;
-      end record
-        with Pack;
-
-      type BCMETH_HDR is record
-         Subtipe     : Interfaces.Unsigned_16;
-         Len         : Interfaces.Unsigned_16;
-         Ver         : Interfaces.Unsigned_8;
-         Oui         : Byte_Array (1 .. 3);
-         Usr_Subtype : Interfaces.Unsigned_16;
-      end record
-        with Pack;
-
-      type EVENT_HDR is record
-         Ver        : Interfaces.Unsigned_16;
-         Flags      : Interfaces.Unsigned_16;
-         Event_Type : Interfaces.Unsigned_32;
-         Status     : Interfaces.Unsigned_32;
-         Reason     : Interfaces.Unsigned_32;
-         Auth_Type  : Interfaces.Unsigned_32;
-         Datalen    : Interfaces.Unsigned_32;
-         Addr       : Byte_Array (1 .. 6);
-         Ifname     : Byte_Array (1 .. 16);
-         Ifidx      : Interfaces.Unsigned_8;
-         Bsscfgidx  : Interfaces.Unsigned_8;
-      end record
-        with Pack;
-
-      type Event_Record is record
-         Ether  : ETHER_HDR;
-         Bcmeth : BCMETH_HDR;
-         Eventh : EVENT_HDR;
-      end record
-        with Pack;
-
-   end SDPCM;
-
    ----------------------
    -- Complete_Reading --
    ----------------------
@@ -1181,15 +719,15 @@ package body SDPCM.Generic_IO is
       Found  : out Boolean)
    is
       use type IOCTL.Command;
-      use type SDPCM.SDPCM_Channel;
+      use type Packets.SDPCM_Channel;
 
-      Got : SDPCM.Packet;
+      Got : Packets.Packet;
    begin
       State.Reading := 0;
 
-      SDPCM.Decode_Input (Buffer, Got);
+      Packets.Decode_Input (Buffer, Got);
 
-      if Got.Channel /= SDPCM.Control then
+      if Got.Channel /= Packets.Control then
          Found := False;
       elsif Got.IOCTL_Header.Command = IOCTL.Command (State.Command) then
          Found := True;
