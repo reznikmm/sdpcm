@@ -6,7 +6,6 @@
 pragma Ada_2022;
 with Ada.Unchecked_Conversion;
 
-with SDPCM.Events;
 with SDPCM.IOCTL;
 with SDPCM.Packets;
 
@@ -31,11 +30,22 @@ package body SDPCM.Generic_IO is
    procedure IOCTL_Set is new IOCTL.Set
      (IOCTL_Data_Offset, IOCTL_Set_In_Place);
 
-   subtype Frame_Tag is Interfaces.Unsigned_32;
+   function IOCTL_Raw_Value
+     (Name    : IOCTL.Output_Variable;
+      Command : IOCTL.Command) return Byte_Array is
+       (case Command is
+        when IOCTL.SET_WSEC =>
+          [(if Network.Security = WPA2_AES then 6 else 2), 0, 0, 0],
+        when IOCTL.SET_WPA_AUTH =>
+          [(if Network.Security = WPA2_AES then 16#80# else 4), 0, 0, 0],
+        when IOCTL.SET_SSID => IOCTL.Encode (Network.SSID, 0),
+        when IOCTL.SET_WSEC_PMK => IOCTL.Encode (Network.Password, 1),
+        when others => (IOCTL.Raw_Value (Name, Command)));
 
-   function Make_Tag (Length : Interfaces.Unsigned_16) return Frame_Tag is
-     (Interfaces.Shift_Left (Interfaces.Unsigned_32 (not Length), 16) +
-      Interfaces.Unsigned_32 (Length));
+   procedure Complete_Reading
+     (State  : in out Generic_IO.State;
+      Buffer : Buffer_Byte_Array;
+      Found  : out Boolean);
 
    package Executor is
 
@@ -368,7 +378,95 @@ package body SDPCM.Generic_IO is
          --  54 =>
            (Kind         => IOCTL_Set,
             Variable     => IOCTL.mcast_list,
-            Command      => IOCTL.SET_VAR)
+            Command      => IOCTL.SET_VAR),
+         --  Restart Join
+         --
+         --  55 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.UP),
+         --  56 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_GMODE,
+            Set_Value    => 1),
+         --  57 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_BAND,
+            Set_Value    => 0),
+         --  58 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.pm2_sleep_ret,
+            Command      => IOCTL.SET_VAR,
+            Set_Value    => 16#C8#),
+         --  59 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.bcn_li_bcn,
+            Command      => IOCTL.SET_VAR,
+            Set_Value    => 1),
+         --  60 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.bcn_li_dtim,
+            Command      => IOCTL.SET_VAR,
+            Set_Value    => 1),
+         --  61 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.assoc_listen,
+            Command      => IOCTL.SET_VAR,
+            Set_Value    => 10),
+         --  62 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_INFRA,
+            Set_Value    => 1),
+         --  63 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_AUTH,
+            Set_Value    => 0),
+         --  set security
+         --  64 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_WSEC),
+         --  65 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.bsscfg_sup_wpa,
+            Command      => IOCTL.SET_VAR),
+         --  66 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.bsscfg_sup_wpa2_eapver,
+            Command      => IOCTL.SET_VAR),
+         --  67 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.bsscfg_sup_wpa_tmo,
+            Command      => IOCTL.SET_VAR),
+         --  68 =>
+           (Kind         => Sleep,
+            Milliseconds => 2),
+         --  69 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_WSEC_PMK),
+         --  70 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_INFRA,
+            Set_Value    => 1),
+         --  71 =>
+           (Kind         => IOCTL_Set_32,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_AUTH,
+            Set_Value    => 0),
+         --  72 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_WPA_AUTH),
+         --  73 =>
+           (Kind         => IOCTL_Set,
+            Variable     => IOCTL.None,
+            Command      => IOCTL.SET_SSID)
           ];
    end Executor;
 
@@ -549,7 +647,7 @@ package body SDPCM.Generic_IO is
          Command  : IOCTL.Command)
       is
          Name : constant Byte_Array := IOCTL.To_Raw_Name (Variable);
-         Raw  : constant Byte_Array := IOCTL.Raw_Value (Variable, Command);
+         Raw  : constant Byte_Array := IOCTL_Raw_Value (Variable, Command);
       begin
          if Offset = 0 then
             Offset := 1;
@@ -693,12 +791,12 @@ package body SDPCM.Generic_IO is
             then
                Bus.Write_Backplane_Register
                  (Address      => Backplane_Register.Win_Addr,
-                  Value        => Value / 256,
+                  Value        => Value / Window_Size * Window_Size / 256,
                   Length       => 3);
             end if;
 
             Bus.Write_Backplane
-              (Address => Value,
+              (Address => Value mod Window_Size,
                Value   => Buffer (1 .. Last));
 
             Offset := Offset + Block_Size;
@@ -828,7 +926,7 @@ package body SDPCM.Generic_IO is
                Buffer       => Buffer,
                Success      => Ok,
                Command      => IOCTL.Command (State.Command),
-               Custom_Value => Make_Tag (16#300# / 4));
+               Custom_Value => Packets.Make_Tag (16#300# / 4));
 
             if State.Step not in Executor.Start'Range then
                raise Program_Error;  --  List is completed

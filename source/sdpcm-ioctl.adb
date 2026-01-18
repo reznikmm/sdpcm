@@ -9,6 +9,10 @@ package body SDPCM.IOCTL is
    TX_Sequence : Interfaces.Unsigned_8 := 0;
    TX_Request  : Interfaces.Unsigned_16 := 0;
 
+   -----------------
+   -- Data_Offset --
+   -----------------
+
    function Data_Offset (Write_Prefix_Length : Natural) return Positive is
       type Header is record
          S : SDPCM.Packets.SDPCM_Header;
@@ -25,6 +29,25 @@ package body SDPCM.IOCTL is
    begin
       return 1 + Dummy.D'Position + Write_Prefix_Length;
    end Data_Offset;
+
+   ------------
+   -- Encode --
+   ------------
+
+   function Encode
+     (Value : String; X : Interfaces.Unsigned_8) return Byte_Array is
+   begin
+      return Raw : Byte_Array (1 .. Value'Length + 4) do
+         Raw (1) := Value'Length;
+         Raw (2) := 0;
+         Raw (3) := X;
+         Raw (4) := 0;
+
+         for J in Value'Range loop
+            Raw (4 + J) := Character'Pos (Value (J));
+         end loop;
+      end return;
+   end Encode;
 
    ---------
    -- Set --

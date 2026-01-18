@@ -76,28 +76,42 @@ package SDPCM.IOCTL is
       ampdu_rx_factor,
       bsscfg_event_msgs,
       mcast_list,
+      pm2_sleep_ret,
+      bcn_li_bcn,
+      bcn_li_dtim,
+      assoc_listen,
+      bsscfg_sup_wpa,
+      bsscfg_sup_wpa2_eapver,
+      bsscfg_sup_wpa_tmo,
       cur_etheraddr);
 
    subtype Output_Variable is IO_Variable
-   range country .. mcast_list;
+   range None .. bsscfg_sup_wpa_tmo;
 
    function To_Name (Name : IO_Variable) return String is
      (case Name is
-         when None              => "",
-         when country           => "country",
-         when cur_etheraddr     => "cur_etheraddr",
-         when bus_txglom        => "bus:txglom",
-         when apsta             => "apsta",
-         when ampdu_ba_wsize    => "ampdu_ba_wsize",
-         when ampdu_mpdu        => "ampdu_mpdu",
-         when ampdu_rx_factor   => "ampdu_rx_factor",
-         when bsscfg_event_msgs => "bsscfg:event_msgs",
-         when mcast_list        => "mcast_list")
+         when None                   => "",
+         when country                => "country",
+         when cur_etheraddr          => "cur_etheraddr",
+         when bus_txglom             => "bus:txglom",
+         when apsta                  => "apsta",
+         when ampdu_ba_wsize         => "ampdu_ba_wsize",
+         when ampdu_mpdu             => "ampdu_mpdu",
+         when ampdu_rx_factor        => "ampdu_rx_factor",
+         when bsscfg_event_msgs      => "bsscfg:event_msgs",
+         when mcast_list             => "mcast_list",
+         when pm2_sleep_ret          => "pm2_sleep_ret",
+         when bcn_li_bcn             => "bcn_li_bcn",
+         when bcn_li_dtim            => "bcn_li_dtim",
+         when assoc_listen           => "assoc_listen",
+         when bsscfg_sup_wpa         => "bsscfg:sup_wpa",
+         when bsscfg_sup_wpa2_eapver => "bsscfg:sup_wpa2_eapver",
+         when bsscfg_sup_wpa_tmo     => "bsscfg:sup_wpa_tmo")
         with Static;
 
    function To_Raw_Name (Name : IO_Variable) return Byte_Array is
      (if Name = None then []
-      else [for X of To_Name (Name) => Character'Pos (X), 0]);
+      else [for X of To_Name (Name) => Character'Pos (X)] & 0);
 
    XX_Country : constant Byte_Array (1 .. 20) :=
      [16#58#, 16#58#, 16#00#, 16#00#, 16#FF#, 16#FF#, 16#FF#, 16#FF#,
@@ -109,17 +123,32 @@ package SDPCM.IOCTL is
       16#01#, 16#00#, 16#5E#, 16#00#, 16#00#, 16#FB#,
       others => 0];
 
+   SUP_WPA : constant Byte_Array (1 .. 8) :=
+     [16#00#, 16#00#, 16#00#, 16#00#, 16#01#, 16#00#, 16#00#, 16#00#];
+
+   SUP_WPA2_EAPVER : constant Byte_Array (1 .. 8) :=
+     [16#00#, 16#00#, 16#00#, 16#00#, 16#FF#, 16#FF#, 16#FF#, 16#FF#];
+
+   SUP_WPA_TMO : constant Byte_Array (1 .. 8) :=
+     [16#00#, 16#00#, 16#00#, 16#00#, 16#C4#, 16#09#, 16#00#, 16#00#];
+
    function Raw_Value
      (Name    : Output_Variable;
       Command : IOCTL.Command) return Byte_Array is
      (case Command is
+         when IOCTL.UP => [],
          when others =>
         (case Name is
-            when country           => XX_Country,
+            when country => XX_Country,
             when bsscfg_event_msgs =>
-               Events.To_Raw_Event_Mask
-           (Events.To_Mask (Events.Join_Events)),
-            when mcast_list        => Multicast_List,
-            when others            => raise Program_Error));
+               Events.To_Raw_Event_Mask (Events.To_Mask (Events.Join_Events)),
+            when mcast_list => Multicast_List,
+            when bsscfg_sup_wpa => SUP_WPA,
+            when bsscfg_sup_wpa2_eapver => SUP_WPA2_EAPVER,
+            when bsscfg_sup_wpa_tmo => SUP_WPA_TMO,
+            when others => raise Program_Error));
+
+   function Encode
+     (Value : String; X : Interfaces.Unsigned_8) return Byte_Array;
 
 end SDPCM.IOCTL;
