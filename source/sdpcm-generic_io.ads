@@ -82,6 +82,16 @@ private
       end case;
    end record;
 
+   type Link_State (Failed : Boolean := True) is record
+      case Failed is
+         when False =>
+            Up   : Boolean;
+            Auth : Boolean;
+         when True =>
+            null;
+      end case;
+   end record;
+
    type State is limited record
       Joining : Joining_State := (Kind => Boot_Up);
       Step    : Positive := 1;
@@ -89,6 +99,7 @@ private
       Command : Interfaces.Unsigned_32 := 0;
       Reading : Natural := 0;
       MAC     : Byte_Array (1 .. 6);
+      Link    : Link_State;
    end record;
 
 end SDPCM.Generic_IO;

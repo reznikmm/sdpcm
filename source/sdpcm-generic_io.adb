@@ -6,6 +6,7 @@
 pragma Ada_2022;
 with Ada.Unchecked_Conversion;
 
+with SDPCM.Events;
 with SDPCM.IOCTL;
 with SDPCM.Packets;
 
@@ -46,6 +47,12 @@ package body SDPCM.Generic_IO is
      (State  : in out Generic_IO.State;
       Buffer : Buffer_Byte_Array;
       Found  : out Boolean);
+
+   procedure On_Event
+     (State : in out Generic_IO.State;
+      Event : SDPCM.Events.Event_Record);
+
+   procedure Change_State (State : in out Generic_IO.State);
 
    package Executor is
 
@@ -807,6 +814,49 @@ package body SDPCM.Generic_IO is
 
    end Executor;
 
+   ------------------
+   -- Change_State --
+   ------------------
+
+   procedure Change_State (State : in out Generic_IO.State) is
+   begin
+      case State.Joining.Kind is
+         when Crashed | Boot_Up =>
+            null;
+
+         when Idle =>
+            State.Joining :=
+              (Kind    => Joining,
+               Timeout => Timeouts.New_Timeout (10));
+
+            State.Link := (Failed => False, Up => False, Auth => False);
+
+            --  Restart_Join (State);
+         when Joining =>
+            if State.Link.Failed
+              or else Timeouts.Is_Expired (State.Joining.Timeout)
+            then
+               State.Joining :=
+                 (Kind    => Failed,
+                  Timeout => Timeouts.New_Timeout (10));
+               --  Stop_Join (State);
+            elsif State.Link.Up and State.Link.Auth then
+               State.Joining := (Kind => Joined);
+            end if;
+         when Joined =>
+            if State.Link.Failed then
+               State.Joining :=
+                 (Kind    => Failed,
+                  Timeout => Timeouts.New_Timeout (10));
+               --  Stop_Join (State);
+            end if;
+         when Failed =>
+            if Timeouts.Is_Expired (State.Joining.Timeout) then
+               State.Joining := (Kind => Idle);
+            end if;
+      end case;
+   end Change_State;
+
    ----------------------
    -- Complete_Reading --
    ----------------------
@@ -821,36 +871,81 @@ package body SDPCM.Generic_IO is
 
       Got : Packets.Packet;
    begin
+      Found := False;
       State.Reading := 0;
 
       Packets.Decode_Input (Buffer, Got);
 
-      if Got.Channel /= Packets.Control then
-         Found := False;
-      elsif Got.IOCTL_Header.Command = IOCTL.Command (State.Command) then
-         Found := True;
-
-         if Got.IOCTL_Header.Command = IOCTL.GET_VAR then
+      case Got.Channel is
+         when Packets.Event =>
             declare
-               From : constant Natural := Got.IOCTL_Offset;
-               Size : constant Natural := Buffer'Last - From + 1;
-            begin
-               if Size >= State.MAC'Length then
-                  State.MAC := Byte_Array
-                    (Buffer (From .. From + State.MAC'Length - 1));
+               Event_Length : constant Positive :=
+                 SDPCM.Events.Event_Record'Size / 8;
 
-                  State.Joining :=
-                    (Kind    => Joining,
-                     Timeout => Timeouts.New_Timeout (10));
-               else
-                  raise Program_Error;
-               end if;
+               subtype Event_Record_Raw is Buffer_Byte_Array (1 .. Event_Length);
+
+               function To_Event_Record is new Ada.Unchecked_Conversion
+                 (Event_Record_Raw, SDPCM.Events.Event_Record);
+
+               Event : SDPCM.Events.Event_Record :=
+                 (if Buffer'Last - Got.Offset + 1 >= Event_Length
+                  then To_Event_Record
+                    (Buffer (Got.Offset .. Got.Offset + Event_Length - 1))
+                  else
+                    (Eventh => (Event_Type => 0, others => <>),
+                     others => <>));
+            begin
+               On_Event (State, Event);
             end;
-         end if;
-      else
-         Found := False;
-      end if;
+         when Packets.Control =>
+            if Got.IOCTL_Header.Command = IOCTL.Command (State.Command) then
+               Found := True;
+
+               if Got.IOCTL_Header.Command = IOCTL.GET_VAR then
+                  declare
+                     From : constant Natural := Got.IOCTL_Offset;
+                     Size : constant Natural := Buffer'Last - From + 1;
+                  begin
+                     if Size >= State.MAC'Length then
+                        State.MAC := Byte_Array
+                          (Buffer (From .. From + State.MAC'Length - 1));
+                     else
+                        raise Program_Error;
+                     end if;
+                  end;
+               end if;
+            end if;
+         when others =>
+            null;
+      end case;
    end Complete_Reading;
+
+   --------------
+   -- On_Event --
+   --------------
+
+   procedure On_Event
+     (State : in out Generic_IO.State;
+      Event : SDPCM.Events.Event_Record)
+   is
+      WLC_E_LINK         : constant := 16#10_00_00_00#;  --  SWAP32 (16)
+      WLC_E_PSK_SUP      : constant := 16#2e_00_00_00#;  --  SWAP32 (46)
+      WLC_E_DISASSOC_IND : constant := 16#0c_00_00_00#;  --  SWAP32 (12)
+   begin
+      if State.Link.Failed then
+         null;  --  Do notheng if link is down
+      elsif Event.Eventh.Event_Type = WLC_E_LINK
+        and Event.Eventh.Status = 0
+      then
+         State.Link.Up := (Event.Eventh.Flags and 16#01_00#) /= 0;
+      elsif Event.Eventh.Event_Type = WLC_E_PSK_SUP then
+         State.Link.Auth := Event.Eventh.Status = 16#06_00_00_00#;
+      elsif Event.Eventh.Event_Type = WLC_E_DISASSOC_IND then
+         State.Link := (Failed => True);
+      end if;
+
+      Change_State (State);
+   end On_Event;
 
    -------------
    -- Process --
@@ -890,52 +985,52 @@ package body SDPCM.Generic_IO is
 
       Ok : Boolean := False;
    begin
-      case State.Joining.Kind is
-         when Boot_Up | Joining =>
-            if State.Reading > 0 then
-               Complete_Reading
-                 (State, Buffer (1 .. State.Reading), Found => Ok);
-            end if;
+      if State.Reading > 0 then
+         Complete_Reading
+           (State, Buffer (1 .. State.Reading), Found => Ok);
+      end if;
 
-            if not Ok and Need_Reading then
-               declare
-                  Length : constant Interfaces.Unsigned_32 :=
-                    Bus.Available_Packet_Length;
-               begin
-                  if Length = 0 then
-                     Action := (Sleep, Milliseconds => 1);
-                  elsif Length <= Buffer'Length then
-                     State.Reading := Positive (Length);
+      if not Ok and
+        (State.Step not in Executor.Start'Range
+           or else Need_Reading)
+      then
+         declare
+            Length : constant Interfaces.Unsigned_32 :=
+              Bus.Available_Packet_Length;
+         begin
+            if Length = 0 then
+               Change_State (State);
+               Action := (Sleep, Milliseconds => 1);
+            elsif Length <= Buffer'Length then
+               State.Reading := Positive (Length);
 
-                     Bus.Start_Reading_WLAN (Buffer (1 .. State.Reading));
-                     Action := (Kind => Complete_IO);
-                  else
-                     raise Program_Error;  --  Buffer too small
-                  end if;
-
-                  return;
-               end;
-            end if;
-
-            Ok := True;
-
-            Executor.Execute
-              (Step         => Executor.Start (State.Step),
-               Index        => State.Step,
-               Offset       => State.Offset,
-               Buffer       => Buffer,
-               Success      => Ok,
-               Command      => IOCTL.Command (State.Command),
-               Custom_Value => Packets.Make_Tag (16#300# / 4));
-
-            if State.Step not in Executor.Start'Range then
-               raise Program_Error;  --  List is completed
+               Bus.Start_Reading_WLAN (Buffer (1 .. State.Reading));
+               Action := (Kind => Complete_IO);
             else
-               Action := To_Action (Executor.Start (State.Step));
+               raise Program_Error;  --  Buffer too small
             end if;
-         when others =>
-            raise Program_Error;
-      end case;
+
+            return;
+         end;
+      end if;
+
+      Ok := True;
+
+      Executor.Execute
+        (Step         => Executor.Start (State.Step),
+         Index        => State.Step,
+         Offset       => State.Offset,
+         Buffer       => Buffer,
+         Success      => Ok,
+         Command      => IOCTL.Command (State.Command),
+         Custom_Value => Packets.Make_Tag (16#300# / 4));
+
+      if State.Step not in Executor.Start'Range then
+         State.Joining := (Kind => Idle);
+         Action := (Kind => Continue);
+      else
+         Action := To_Action (Executor.Start (State.Step));
+      end if;
 
       if not Ok then
          State.Joining := (Kind => Crashed);

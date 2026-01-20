@@ -48,4 +48,42 @@ package SDPCM.Events is
 
    function To_Raw_Event_Mask (Mask : Event_Mask) return Raw_Event_Mask;
 
+   type ETHER_HDR is record
+      Dest_Addr : Byte_Array (1 .. 6);
+      Srce_Addr : Byte_Array (1 .. 6);
+      Tipe      : Interfaces.Unsigned_16;
+   end record
+     with Pack;
+
+   type BCMETH_HDR is record
+      Subtipe     : Interfaces.Unsigned_16;
+      Len         : Interfaces.Unsigned_16;
+      Ver         : Interfaces.Unsigned_8;
+      Oui         : Byte_Array (1 .. 3);
+      Usr_Subtype : Interfaces.Unsigned_16;
+   end record
+     with Pack;
+
+   type EVENT_HDR is record
+      Ver        : Interfaces.Unsigned_16;
+      Flags      : Interfaces.Unsigned_16;
+      Event_Type : Interfaces.Unsigned_32;
+      Status     : Interfaces.Unsigned_32;
+      Reason     : Interfaces.Unsigned_32;
+      Auth_Type  : Interfaces.Unsigned_32;
+      Datalen    : Interfaces.Unsigned_32;
+      Addr       : Byte_Array (1 .. 6);
+      Ifname     : Byte_Array (1 .. 16);
+      Ifidx      : Interfaces.Unsigned_8;
+      Bsscfgidx  : Interfaces.Unsigned_8;
+   end record
+     with Pack;
+
+   type Event_Record is record
+      Ether  : ETHER_HDR;
+      Bcmeth : BCMETH_HDR;
+      Eventh : EVENT_HDR;
+   end record
+     with Pack;
+
 end SDPCM.Events;
