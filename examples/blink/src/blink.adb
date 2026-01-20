@@ -5,6 +5,7 @@
 
 pragma Ada_2022;
 
+with Ada.Text_IO;
 with RP.Timer;
 with System;
 
@@ -99,12 +100,19 @@ begin
    loop
       declare
          Action : SDPCM_IO.Action;
+         From   : Positive := 1;
+         To     : Natural := 0;
       begin
          SDPCM_IO.Process
            (State,
             Buffer,
-            Length => 0,
+            From,
+            To,
             Action => Action);
+
+         if From <= To then
+            Ada.Text_IO.Put_Line ("Got " & Integer'Image (To - From + 1));
+         end if;
 
          case Action.Kind is
             when SDPCM_IO.Idle =>

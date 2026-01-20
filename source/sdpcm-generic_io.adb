@@ -7,6 +7,7 @@ pragma Ada_2022;
 with Ada.Unchecked_Conversion;
 
 with SDPCM.Events;
+with SDPCM.Generic_IO;
 with SDPCM.IOCTL;
 with SDPCM.Packets;
 
@@ -46,6 +47,7 @@ package body SDPCM.Generic_IO is
    procedure Complete_Reading
      (State  : in out Generic_IO.State;
       Buffer : Buffer_Byte_Array;
+      From   : out Natural;
       Found  : out Boolean);
 
    procedure On_Event
@@ -864,6 +866,7 @@ package body SDPCM.Generic_IO is
    procedure Complete_Reading
      (State  : in out Generic_IO.State;
       Buffer : Buffer_Byte_Array;
+      From   : out Natural;
       Found  : out Boolean)
    is
       use type IOCTL.Command;
@@ -872,6 +875,7 @@ package body SDPCM.Generic_IO is
       Got : Packets.Packet;
    begin
       Found := False;
+      From := 0;
       State.Reading := 0;
 
       Packets.Decode_Input (Buffer, Got);
@@ -915,6 +919,9 @@ package body SDPCM.Generic_IO is
                   end;
                end if;
             end if;
+         when Packets.Data =>
+            From := Got.Offset;
+            null;
          when others =>
             null;
       end case;
@@ -954,7 +961,8 @@ package body SDPCM.Generic_IO is
    procedure Process
      (State  : in out Generic_IO.State;
       Buffer : in out Buffer_Byte_Array;
-      Length : Natural;
+      From   : in out Positive;
+      To     : in out Natural;
       Action : out Generic_IO.Action)
    is
       function To_Action
@@ -984,10 +992,24 @@ package body SDPCM.Generic_IO is
              when others => False);
 
       Ok : Boolean := False;
+      Offset : Natural;
    begin
       if State.Reading > 0 then
+         To := State.Reading;
+
          Complete_Reading
-           (State, Buffer (1 .. State.Reading), Found => Ok);
+           (State,
+            Buffer (1 .. State.Reading),
+            Offset,
+            Found => Ok);
+
+         if Offset > 0 then
+            From := Offset;
+            return;
+         else
+            From := 1;
+            To := 0;
+         end if;
       end if;
 
       if not Ok and

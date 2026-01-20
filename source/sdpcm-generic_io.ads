@@ -55,15 +55,19 @@ package SDPCM.Generic_IO is
    procedure Process
      (State  : in out SDPCM.Generic_IO.State;
       Buffer : in out Buffer_Byte_Array;
-      Length : Natural;
+      From   : in out Positive;
+      To     : in out Natural;
       Action : out SDPCM.Generic_IO.Action);
    --  Process IO events and change State accordingly. This procedure is not
    --  expected to block. User should't change Buffer content if asynchronous
    --  IO is in progress (Action.Kind = Complete_IO).
    --
    --  To send data packet to the device, user should write data to Buffer
-   --  and call Process with Length set to the length of the data to send.
+   --  and call Process with From/To set to the bounds of the data to send.
    --  This could be done only if Action.Kind = Idle.
+   --
+   --  On receive data it will be put into the Buffer and From/To assigned
+   --  to non-empty range.
 
 private
 
