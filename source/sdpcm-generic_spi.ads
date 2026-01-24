@@ -42,11 +42,11 @@ package SDPCM.Generic_SPI is
 
    procedure Read_WLAN (Value : out Buffer_Byte_Array);
 
-   function Has_Event return Boolean;
-
    function Available_Packet_Length return Interfaces.Unsigned_32;
+   --  Check if WiFi chip is ready to send data to driver/host
 
-   function Is_Ready_To_Send return Boolean;
+   function Is_Ready return Boolean;
+   --  Check if WiFi chip is ready to receive data from driver/host
 
    procedure Clear_Error;
 

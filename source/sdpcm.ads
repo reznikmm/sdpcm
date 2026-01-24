@@ -82,15 +82,12 @@ package SDPCM is
       --  * Address => Address
       --  * Length => Value'Length - Write_Prefix_Length
 
-      with function Has_Event return Boolean;
-      --  Check if there is an event from the bus.
+      with function Is_Ready return Boolean;
+      --  Check if the bus is ready to send data to WiFi chip.
 
       with function Available_Packet_Length return Interfaces.Unsigned_32;
       --  Get length of the available packet to read. Returns 0 if no packet
       --  is available.
-
-      with function Is_Ready_To_Send return Boolean;
-      --  Check if the bus is ready to send data.
 
       with procedure Clear_Error;
       --  Clear any error state on the bus.

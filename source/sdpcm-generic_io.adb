@@ -25,6 +25,7 @@ package body SDPCM.Generic_IO is
    end Backplane_Register;
 
    procedure IOCTL_Set_In_Place is new IOCTL.Set_In_Place (Bus);
+   procedure IOCTL_Send_Buffer is new IOCTL.Send_Buffer (Bus);
 
    function IOCTL_Data_Offset return Natural is
      (IOCTL.Data_Offset (Bus.Write_Prefix_Length));
@@ -49,6 +50,10 @@ package body SDPCM.Generic_IO is
       Buffer : Buffer_Byte_Array;
       From   : out Natural;
       Found  : out Boolean);
+   --  Process data from WiFi chip in Buffer. If it has a response to the
+   --  current IOCTL command then set Found=True. If data is a packet
+   --  set From to the first data byte, so Buffer(From..Buffer'Last) is
+   --  the packet data.
 
    procedure On_Event
      (State : in out Generic_IO.State;
@@ -68,7 +73,7 @@ package body SDPCM.Generic_IO is
          IOCTL_Get,
          IOCTL_Set,
          IOCTL_Set_32,
-         Wait_Any_Event,
+         Wait_Is_Ready,
          Clear_Error,
          Sleep);
 
@@ -98,7 +103,7 @@ package body SDPCM.Generic_IO is
                      | IOCTL_Get
                      | IOCTL_Set
                      | IOCTL_Set_32
-                     | Wait_Any_Event
+                     | Wait_Is_Ready
                      | Clear_Error
                      | Sleep
                    =>
@@ -123,7 +128,7 @@ package body SDPCM.Generic_IO is
                      null;
                end case;
 
-            when Sleep | Wait_Any_Event =>
+            when Sleep | Wait_Is_Ready =>
                Milliseconds : Natural;
          end case;
       end record;
@@ -286,7 +291,7 @@ package body SDPCM.Generic_IO is
             Length       => 1,
             Trys         => 50),
          --  32 =>
-           (Kind => Executor.Wait_Any_Event,
+           (Kind => Executor.Wait_Is_Ready,
             Milliseconds => 100),
          --  33 =>
            (Kind         => Executor.Upload_CLM),
@@ -583,8 +588,8 @@ package body SDPCM.Generic_IO is
                IOCTL_Set
                  (Step.Variable, Offset, Buffer, Command, Step.Set_Value);
 
-            when Wait_Any_Event =>
-               Value := Boolean'Pos (Bus.Has_Event);
+            when Wait_Is_Ready =>
+               Value := Boolean'Pos (Bus.Is_Ready);
 
             when others =>
                null;
@@ -610,7 +615,7 @@ package body SDPCM.Generic_IO is
                   Increment_Step;
                end if;
 
-            when Wait_Any_Event =>
+            when Wait_Is_Ready =>
                if Value = 1 then
                   Increment_Step;
                elsif Offset < Step.Milliseconds then
@@ -971,7 +976,7 @@ package body SDPCM.Generic_IO is
               when Executor.Sleep =>
                 (Sleep, Milliseconds => Step.Milliseconds),
               when Executor.Read_Register_Until
-                | Executor.Wait_Any_Event =>
+                | Executor.Wait_Is_Ready =>
                   (if State.Offset = 0 then (Kind => Continue)
                    else (Sleep, Milliseconds => 1)),
               when Executor.Upload_CLM
@@ -994,7 +999,11 @@ package body SDPCM.Generic_IO is
       Ok : Boolean := False;
       Offset : Natural;
    begin
-      if State.Reading > 0 then
+      if From <= To then
+         IOCTL_Send_Buffer (Buffer, From, To);
+         Action := (Kind => Complete_IO);
+         return;
+      elsif State.Reading > 0 then
          To := State.Reading;
 
          Complete_Reading
@@ -1012,24 +1021,27 @@ package body SDPCM.Generic_IO is
          end if;
       end if;
 
-      if not Ok and
-        (State.Step not in Executor.Start'Range
-           or else Need_Reading)
+      if not Ok
+        and (State.Step not in Executor.Start'Range or else Need_Reading)
       then
+         --  No response found, (no active step or the step needs reading)
          declare
             Length : constant Interfaces.Unsigned_32 :=
               Bus.Available_Packet_Length;
          begin
-            if Length = 0 then
-               Change_State (State);
-               Action := (Sleep, Milliseconds => 1);
-            elsif Length <= Buffer'Length then
+            if Natural (Length) in Buffer'Range then
                State.Reading := Positive (Length);
 
                Bus.Start_Reading_WLAN (Buffer (1 .. State.Reading));
                Action := (Kind => Complete_IO);
-            else
+            elsif Length > 0 then
                raise Program_Error;  --  Buffer too small
+            elsif Bus.Is_Ready then
+               Change_State (State);
+               Action := (Kind => Idle);
+            else
+               Change_State (State);
+               Action := (Sleep, Milliseconds => 1);
             end if;
 
             return;

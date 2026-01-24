@@ -32,9 +32,8 @@ procedure Blink is
       Start_Writing_WLAN       => Picowi.PIO_SPI.gSPI.Write_WLAN,
       Start_Reading_WLAN       => Picowi.PIO_SPI.gSPI.Read_WLAN,
       Write_Backplane          => Picowi.PIO_SPI.gSPI.Write_Backplane,
-      Has_Event                => Picowi.PIO_SPI.gSPI.Has_Event,
+      Is_Ready                 => Picowi.PIO_SPI.gSPI.Is_Ready,
       Available_Packet_Length  => Picowi.PIO_SPI.gSPI.Available_Packet_Length,
-      Is_Ready_To_Send         => Picowi.PIO_SPI.gSPI.Is_Ready_To_Send,
       Clear_Error              => Picowi.PIO_SPI.gSPI.Clear_Error);
 
    --  Timeout interface implementation

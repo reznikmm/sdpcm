@@ -155,29 +155,11 @@ package body SDPCM.Generic_SPI is
       Success := Value = 16#EDFE_ADBE#;
    end Detect_Chip;
 
-   ---------------
-   -- Has_Event --
-   ---------------
+   --------------
+   -- Is_Ready --
+   --------------
 
-   function Has_Event return Boolean is
-      F2_RX_READY : constant := 16#0020#;
-
-      Value : Interfaces.Unsigned_32;
-   begin
-      Read_Register
-        (Bus_Function => SDPCM.Bus,
-         Address      => gSPI_Register.Status,
-         Length       => 1,
-         Value        => Value);
-
-      return (Value and F2_RX_READY) /= 0;
-   end Has_Event;
-
-   ----------------------
-   -- Is_Ready_To_Send --
-   ----------------------
-
-   function Is_Ready_To_Send return Boolean is
+   function Is_Ready return Boolean is
       F2_RX_READY : constant := 16#20#;
 
       Value : Interfaces.Unsigned_32;
@@ -186,11 +168,11 @@ package body SDPCM.Generic_SPI is
       Read_Register
         (Bus_Function => SDPCM.Bus,
          Address      => gSPI_Register.Status,
-         Length       => 4,
+         Length       => 1,
          Value        => Value);
 
       return (Value and F2_RX_READY) /= 0;
-   end Is_Ready_To_Send;
+   end Is_Ready;
 
    ----------
    -- Read --

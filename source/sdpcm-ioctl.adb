@@ -76,6 +76,63 @@ package body SDPCM.IOCTL is
       Set_In_Place (Buffer (1 .. Last), Command, Write);
    end Set;
 
+   -----------------
+   -- Send_Buffer --
+   -----------------
+
+   procedure Send_Buffer
+     (Buffer : in out Buffer_Byte_Array;
+      From   : Positive;
+      To     : Positive)
+   is
+
+      type Output_Data is record
+         Prefix : Buffer_Byte_Array (1 .. Bus.Write_Prefix_Length);
+         SDPCM  : Packets.SDPCM_Header;
+         Pad    : Interfaces.Unsigned_16;
+         BDC    : Packets.BDC_Header;
+         Data   : Buffer_Byte_Array (1 .. 1600);
+      end record
+        with Pack;
+
+      Output : Output_Data
+        with Import, Address => Buffer'Address;
+
+   begin
+      if From /= 1 + Output.Data'Position then
+         declare
+            First : Positive := 1 + Output.Data'Position;
+            Last  : Positive := First + To - From;
+         begin
+            Buffer (First .. Last) := Buffer (From .. To);
+         end;
+      end if;
+
+      TX_Sequence := Interfaces.Unsigned_8'Succ (TX_Sequence);
+
+      Output :=
+        (Prefix => Bus.Write_Prefix
+           (Bus_Function => WLAN,
+            Address      => 0,
+            Length       => To - Bus.Write_Prefix_Length),
+         SDPCM  =>
+           (Tag      =>
+                Packets.Make_Tag
+                   (Interfaces.Unsigned_16 (To - Bus.Write_Prefix_Length)),
+            Sequence => TX_Sequence,
+            Channel  => Packets.Data,
+            Next_Len => 0,
+            Hdr_Len  => Packets.SDPCM_Header'Size / 8 + 2,
+            Flow     => 0,
+            Credit   => 0,
+            Reserved => 0),
+         Pad  => 0,
+         BDC  => (16#20#, 0, 0, 0),
+         Data => <>);
+
+      Bus.Start_Writing_WLAN (Buffer (1 .. To));
+   end Send_Buffer;
+
    ------------------
    -- Set_In_Place --
    ------------------

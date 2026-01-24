@@ -48,6 +48,13 @@ package SDPCM.IOCTL is
       Command : IOCTL.Command;
       Write   : Boolean);
 
+   generic
+      with package Bus is new SDPCM.Generic_Bus (<>);
+   procedure Send_Buffer
+     (Buffer : in out Buffer_Byte_Array;
+      From   : Positive;
+      To     : Positive);
+
    function Data_Offset (Write_Prefix_Length : Natural) return Positive;
 
    type IOCTL_Header is record
