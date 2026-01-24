@@ -308,7 +308,7 @@ package body SDPCM.Generic_IO is
          --  36 =>
            (Kind         => Write_Register,
             Address      => Backplane_Register.GPIO_Out,
-            Value        => 1,
+            Value        => 0,
             Length       => 4),
          --  37 =>
            (Kind         => IOCTL_Get,
@@ -1070,5 +1070,17 @@ package body SDPCM.Generic_IO is
          State.Joining := (Kind => Crashed);
       end if;
    end Process;
+
+   --------------
+   -- Set_GPIO --
+   --------------
+
+   procedure Set_GPIO (Value : Interfaces.Unsigned_32) is
+   begin
+      Bus.Write_Backplane_Register
+        (Address => Backplane_Register.GPIO_Out,
+         Length  => 4,
+         Value   => Value);
+   end Set_GPIO;
 
 end SDPCM.Generic_IO;

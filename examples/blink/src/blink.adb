@@ -6,6 +6,7 @@
 pragma Ada_2022;
 
 with Ada.Text_IO;
+with Interfaces;
 with RP.Timer;
 with System;
 
@@ -79,6 +80,7 @@ procedure Blink is
 
    Buffer : SDPCM.Buffer_Byte_Array (1 .. 1600);
    State  : SDPCM_IO.State;
+   Prev   : RP.Timer.Time;
 begin
    RP.Clock.Initialize (Pico.XOSC_Frequency);
    RP.Device.Timer.Enable;
@@ -96,6 +98,8 @@ begin
    Picowi.PIO_SPI.gSPI.Switch_Endian (Ok);
    pragma Assert (Ok);
 
+   Prev := RP.Timer.Clock;
+
    loop
       declare
          Action : SDPCM_IO.Action;
@@ -111,6 +115,13 @@ begin
 
          if From <= To then
             Ada.Text_IO.Put_Line ("Got " & Integer'Image (To - From + 1));
+         elsif RP.Timer.Clock - Prev > RP.Timer.Ticks_Per_Second then
+            Prev := RP.Timer.Clock;
+
+            SDPCM_IO.Set_GPIO
+              (Interfaces.Unsigned_32
+                 (Prev / RP.Timer.Ticks_Per_Second mod 2));
+            --  Turn LED ON or OFF
          end if;
 
          case Action.Kind is

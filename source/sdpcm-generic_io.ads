@@ -69,6 +69,9 @@ package SDPCM.Generic_IO is
    --  On receive data it will be put into the Buffer and From/To assigned
    --  to non-empty range.
 
+   procedure Set_GPIO (Value : Interfaces.Unsigned_32);
+   --  Could be use to control LED connected to WiFi chip
+
 private
 
    type Joining_State_Kind is
