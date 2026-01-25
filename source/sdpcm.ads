@@ -66,9 +66,9 @@ package SDPCM is
       with procedure Start_Writing_WLAN (Value : Buffer_Byte_Array);
       --  Start asynchronous write to WLAN function.
       --  Value should be prefixed with Write_Prefix with these parameters
-      --  * Bus_Function => WLAN
-      --  * Address => 0
-      --  * Length => Value'Length - Write_Prefix_Length
+      --   * Bus_Function => WLAN
+      --   * Address => 0
+      --   * Length => Value'Length - Write_Prefix_Length
 
       with procedure Start_Reading_WLAN (Value : out Buffer_Byte_Array);
       --  Start asynchronous read from WLAN function.
@@ -78,9 +78,9 @@ package SDPCM is
          Value   : Buffer_Byte_Array);
       --  Write to backplane function synchronously.
       --  Value should be prefixed with Write_Prefix with these parameters
-      --  * Bus_Function => Backplane
-      --  * Address => Address
-      --  * Length => Value'Length - Write_Prefix_Length
+      --   * Bus_Function => Backplane
+      --   * Address => Address
+      --   * Length => Value'Length - Write_Prefix_Length
 
       with function Is_Ready return Boolean;
       --  Check if the bus is ready to send data to WiFi chip.
@@ -93,7 +93,13 @@ package SDPCM is
       --  Clear any error state on the bus.
 
    package Generic_Bus is
-      --  Generic Bus Interface
+      --  Bus abstraction layer used by the driver core.
+      --
+      --  The bus layer is responsible for low-level communication with the
+      --  WiFi chip (SPI, SDIO, etc). Some operations are synchronous, while
+      --  WLAN data transfers are asynchronous and must complete outside of
+      --  SDPCM.Generic_IO.Poll().
+      --
    end Generic_Bus;
 
    generic
@@ -101,7 +107,8 @@ package SDPCM is
       with function New_Timeout (Second : Natural) return Timeout;
       with function Is_Expired (Value : Timeout) return Boolean;
    package Generic_Timeouts is
-      --  Generic Timeouts Interface
+      --  Abstract timeout interface used by the driver to implement protocol
+      --  delays without depending on a specific time source or runtime.
    end Generic_Timeouts;
 
    type Resource_Kind is (Firmware, NVRAM, CLM_Blob);

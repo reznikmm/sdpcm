@@ -124,18 +124,11 @@ package body Enet_Picowi.Generic_Interface is
          if Net.Buffers.Is_Null (Output) then
             declare
                Addr : constant System.Address := Packet.Get_Data_Address;
-               From : Positive := 1;
-               To   : Natural := 0;
                Raw  : SDPCM.Buffer_Byte_Array
                  (1 .. Net.Buffers.Data_Type'Length)
                    with Import, Address => Addr;
             begin
-               SDPCM_IO.Process
-                 (Self.State,
-                  Raw,
-                  From,
-                  To,
-                  Action => Action);
+               SDPCM_IO.Poll (Self.State, Raw, Action => Action);
             end;
          else
             declare
@@ -150,11 +143,10 @@ package body Enet_Picowi.Generic_Interface is
                     (1 .. Net.Buffers.Data_Type'Length)
                       with Import, Address => Addr;
                begin
-                  SDPCM_IO.Process
+                  SDPCM_IO.Poll
                     (Self.State,
                      Raw,
-                     From,
-                     Size,
+                     Send   => (From, To => Size),
                      Action => Action);
                   --  TBD: Complete IO then release Output buffer
                end;
@@ -177,8 +169,8 @@ package body Enet_Picowi.Generic_Interface is
                Net.Buffers.Release (Output);
             when SDPCM_IO.Process_Packet =>
                declare
-                  From : constant Positive := Action.From;
-                  To   : constant Positive := Action.To;
+                  From : constant Positive := Action.Span.From;
+                  To   : constant Positive := Action.Span.To;
                   Addr : constant System.Address := Packet.Get_Data_Address;
                   Raw  : SDPCM.Buffer_Byte_Array
                     (1 .. Net.Buffers.Data_Type'Length)

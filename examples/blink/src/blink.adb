@@ -105,16 +105,14 @@ begin
          use all type SDPCM_IO.Action_Kind;
          Action : SDPCM_IO.Action;
       begin
-         SDPCM_IO.Process
+         SDPCM_IO.Poll
            (State,
             Buffer,
-            From => 1,
-            To => 0,
             Action => Action);
 
          if Action.Kind = Process_Packet then
             Ada.Text_IO.Put_Line
-              ("Got " & Integer'Image (Action.To - Action.From + 1));
+              ("Got " & Integer'Image (Action.Span.To - Action.Span.From + 1));
          elsif RP.Timer.Clock - Prev > RP.Timer.Ticks_Per_Second then
             Prev := RP.Timer.Clock;
 

@@ -963,11 +963,10 @@ package body SDPCM.Generic_IO is
    -- Process --
    -------------
 
-   procedure Process
+   procedure Poll
      (State  : in out Generic_IO.State;
       Buffer : in out Buffer_Byte_Array;
-      From   : Positive;
-      To     : Natural;
+      Send   : Buffer_Span := Empty;
       Action : out Generic_IO.Action)
    is
       function To_Action
@@ -999,15 +998,14 @@ package body SDPCM.Generic_IO is
       Ok : Boolean := False;
       Offset : Natural;
    begin
-      if From <= To then
-         IOCTL_Send_Buffer (Buffer, From, To);
+      if Send.From <= Send.To then
+         IOCTL_Send_Buffer (Buffer, Send.From, Send.To);
          Action := (Kind => Complete_IO);
          return;
       elsif State.Reading > 0 then
          Action :=
            (Kind => Process_Packet,
-            From => 1,
-            To   => State.Reading);
+            Span => (From => 1, To => State.Reading));
 
          Complete_Reading
            (State,
@@ -1016,7 +1014,7 @@ package body SDPCM.Generic_IO is
             Found => Ok);
 
          if Offset > 0 then
-            Action.From := Offset;
+            Action.Span.From := Offset;
             return;
          end if;
       end if;
@@ -1071,7 +1069,7 @@ package body SDPCM.Generic_IO is
       if not Ok then
          State.Joining := (Kind => Crashed);
       end if;
-   end Process;
+   end Poll;
 
    --------------
    -- Set_GPIO --
