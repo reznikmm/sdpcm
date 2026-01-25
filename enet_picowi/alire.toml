@@ -1,0 +1,25 @@
+name = "enet_picowi"
+description = "ENet WiFi driver for Raspberry Pi Pico W"
+version = "0.1.0-dev"
+
+authors = ["Max Reznik"]
+maintainers = ["Max Reznik <reznikmm@gmail.com>"]
+maintainers-logins = ["reznikmm"]
+licenses = "MIT"
+website = "https://github.com/reznikmm/sdpcm"
+tags = ["driver", "network", "wireless"]
+
+[[depends-on]]
+picowi = "~0.1.0-dev"
+enet = "^1.1"
+light_tasking_rp2040 = "*"
+
+[[pins]]
+picowi = { path='../picowi' }
+enet = { url='https://github.com/stcarrez/ada-enet' }
+
+[configuration.values]
+light_tasking_rp2040.Max_CPUs = 1
+enet.Default_Random = "null"
+rp2040_hal.Use_Startup = false
+rp2040_hal.Interrupts = "bb_runtimes"

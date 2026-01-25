@@ -966,8 +966,8 @@ package body SDPCM.Generic_IO is
    procedure Process
      (State  : in out Generic_IO.State;
       Buffer : in out Buffer_Byte_Array;
-      From   : in out Positive;
-      To     : in out Natural;
+      From   : Positive;
+      To     : Natural;
       Action : out Generic_IO.Action)
    is
       function To_Action
@@ -1004,7 +1004,10 @@ package body SDPCM.Generic_IO is
          Action := (Kind => Complete_IO);
          return;
       elsif State.Reading > 0 then
-         To := State.Reading;
+         Action :=
+           (Kind => Process_Packet,
+            From => 1,
+            To   => State.Reading);
 
          Complete_Reading
            (State,
@@ -1013,11 +1016,8 @@ package body SDPCM.Generic_IO is
             Found => Ok);
 
          if Offset > 0 then
-            From := Offset;
+            Action.From := Offset;
             return;
-         else
-            From := 1;
-            To := 0;
          end if;
       end if;
 
@@ -1036,7 +1036,9 @@ package body SDPCM.Generic_IO is
                Action := (Kind => Complete_IO);
             elsif Length > 0 then
                raise Program_Error;  --  Buffer too small
-            elsif Bus.Is_Ready then
+            elsif State.Step not in Executor.Start'Range
+              and then Bus.Is_Ready
+            then
                Change_State (State);
                Action := (Kind => Idle);
             else

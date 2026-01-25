@@ -102,19 +102,19 @@ begin
 
    loop
       declare
+         use all type SDPCM_IO.Action_Kind;
          Action : SDPCM_IO.Action;
-         From   : Positive := 1;
-         To     : Natural := 0;
       begin
          SDPCM_IO.Process
            (State,
             Buffer,
-            From,
-            To,
+            From => 1,
+            To => 0,
             Action => Action);
 
-         if From <= To then
-            Ada.Text_IO.Put_Line ("Got " & Integer'Image (To - From + 1));
+         if Action.Kind = Process_Packet then
+            Ada.Text_IO.Put_Line
+              ("Got " & Integer'Image (Action.To - Action.From + 1));
          elsif RP.Timer.Clock - Prev > RP.Timer.Ticks_Per_Second then
             Prev := RP.Timer.Clock;
 

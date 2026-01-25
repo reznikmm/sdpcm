@@ -17,7 +17,11 @@ jobs:
         path: adl
     - uses: alire-project/setup-alire@v5
     - name: Build project
-      run: alr build & alr -C picowi build
+      run: |
+        alr                build
+        alr -C picowi      build
+        alr -C enet_picowi build
     - name: Build examples
       run: |
-        alr -C examples/blink build
+        alr -C examples/blink     build
+        alr -C examples/enet_ping build

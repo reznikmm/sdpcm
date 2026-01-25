@@ -6,7 +6,7 @@ authors = ["Max Reznik"]
 maintainers = ["Max Reznik <reznikmm@gmail.com>"]
 maintainers-logins = ["reznikmm"]
 licenses = "Apache-2.0 WITH LLVM-exception"
-website = ""
+website = "https://github.com/reznikmm/sdpcm"
 tags = ["driver", "network", "wireless"]
 
 [build-switches]
@@ -22,4 +22,4 @@ pico_bsp = "^2.2.0"
 
 [[pins]]
 sdpcm = { path='..' }
-rp2040_hal = { url='https://github.com/JeremyGrosser/rp2040_hal' }
+rp2040_hal = { url='https://github.com/reznikmm/rp2040_hal', branch='topic/name_clash'}

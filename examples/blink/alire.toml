@@ -9,7 +9,7 @@ version = "0.1.0-dev"
 authors = ["Max Reznik"]
 maintainers = ["Max Reznik <reznikmm@gmail.com>"]
 maintainers-logins = ["reznikmm"]
-licenses = "Apache-2.0 WITH LLVM-exception"
+licenses = "MIT"
 website = ""
 tags = []
 
@@ -24,10 +24,8 @@ development.contracts = "Yes"
 [[depends-on]]
 pico_bsp = "^2.2.0"
 picowi = "*"
-rp2040_hal = "*"
 sdpcm = "*"
 
 [[pins]]
 picowi = { path='../../picowi' }
-rp2040_hal = { url='https://github.com/JeremyGrosser/rp2040_hal' }
 sdpcm = { path='../..' }

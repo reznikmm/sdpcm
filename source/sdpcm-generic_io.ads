@@ -53,11 +53,11 @@ package SDPCM.Generic_IO is
    --  Action returned by Process procedure.
 
    procedure Process
-     (State  : in out SDPCM.Generic_IO.State;
+     (State  : in out Generic_IO.State;
       Buffer : in out Buffer_Byte_Array;
-      From   : in out Positive;
-      To     : in out Natural;
-      Action : out SDPCM.Generic_IO.Action);
+      From   : Positive;
+      To     : Natural;
+      Action : out Generic_IO.Action);
    --  Process IO events and change State accordingly. This procedure is not
    --  expected to block. User should't change Buffer content if asynchronous
    --  IO is in progress (Action.Kind = Complete_IO).
@@ -66,11 +66,17 @@ package SDPCM.Generic_IO is
    --  and call Process with From/To set to the bounds of the data to send.
    --  This could be done only if Action.Kind = Idle.
    --
-   --  On receive data it will be put into the Buffer and From/To assigned
-   --  to non-empty range.
+   --  On receive data it will be put into the Buffer and Action.From/To
+   --  assigned to non-empty range.
 
    procedure Set_GPIO (Value : Interfaces.Unsigned_32);
    --  Could be use to control LED connected to WiFi chip
+
+   function Is_Joinded (State : SDPCM.Generic_IO.State) return Boolean;
+
+   subtype Ether_Address is Byte_Array (1 .. 6);
+
+   function Get_MAC (State : SDPCM.Generic_IO.State) return Ether_Address;
 
 private
 
@@ -105,8 +111,14 @@ private
       Offset  : Natural := 0;
       Command : Interfaces.Unsigned_32 := 0;
       Reading : Natural := 0;
-      MAC     : Byte_Array (1 .. 6);
+      MAC     : Ether_Address := (others => 0);
       Link    : Link_State;
    end record;
+
+   function Get_MAC (State   : SDPCM.Generic_IO.State) return Ether_Address is
+      (State.MAC);
+
+   function Is_Joinded (State : SDPCM.Generic_IO.State) return Boolean is
+      (State.Joining.Kind = Joined);
 
 end SDPCM.Generic_IO;

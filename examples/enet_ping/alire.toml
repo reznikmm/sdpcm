@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Max Reznik <reznikmm@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+name = "enet_ping"
+description = "Ping example with ENet IP stack and light_tasking_rp2040 runtime"
+version = "0.1.0-dev"
+
+authors = ["Max Reznik"]
+maintainers = ["Max Reznik <reznikmm@gmail.com>"]
+maintainers-logins = ["reznikmm"]
+licenses = "MIT"
+website = ""
+tags = []
+
+executables = ["enet_ping"]
+
+[[depends-on]]
+light_tasking_rp2040 = "*"
+enet_picowi = "~0.1.0-dev"
+
+[[pins]]
+enet_picowi = { path='../../enet_picowi' }
+
+[configuration.values]
+light_tasking_rp2040.Max_CPUs = 1
+enet.Default_Random = "null"
+rp2040_hal.Use_Startup = false
+rp2040_hal.Interrupts = "bb_runtimes"

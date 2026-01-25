@@ -105,7 +105,14 @@ package body SDPCM.IOCTL is
             Last  : Positive := First + To - From;
          begin
             Buffer (First .. Last) := Buffer (From .. To);
+            Last := (Last + 3) / 4 * 4;
+
+            Send_Buffer (Buffer, First, Last);
+            return;
          end;
+      elsif To /= (To + 3) / 4 * 4 then
+        Send_Buffer (Buffer, From, (To + 3) / 4 * 4);
+         return;
       end if;
 
       TX_Sequence := Interfaces.Unsigned_8'Succ (TX_Sequence);

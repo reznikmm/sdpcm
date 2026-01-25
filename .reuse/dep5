@@ -3,7 +3,7 @@ Upstream-Name: sdpcm
 Upstream-Contact: Max Reznik <reznikmm@gmail.com>
 Source: https://github.com/reznikmm/sdpcm
 
-Files: README.md alire.toml picowi/alire.toml
+Files: README.md alire.toml picowi/alire.toml enet_picowi/alire.toml
 Copyright: 2026 Max Reznik <reznikmm@gmail.com>
 License: MIT
 
