@@ -21,6 +21,11 @@ development.style_checks = ["-gnaty", "-gnaty-B"]
 development.contracts = "Yes"
 "*".debug_info = "Yes"
 
+[[actions]]
+type = "post-build"
+command = ["arm-eabi-objcopy", "-Obinary", "blink", "blink.bin"]
+directory = "bin"
+
 [[depends-on]]
 pico_bsp = "^2.2.0"
 picowi = "*"

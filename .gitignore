@@ -6,3 +6,5 @@
 /lib/
 /alire/
 /config/
+*.clm_blob
+*.bin

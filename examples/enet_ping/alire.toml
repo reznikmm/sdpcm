@@ -22,6 +22,11 @@ enet_picowi = "~0.1.0-dev"
 [[pins]]
 enet_picowi = { path='../../enet_picowi' }
 
+[[actions]]
+type = "post-build"
+command = ["arm-eabi-objcopy", "-Obinary", "enet_ping", "enet_ping.bin"]
+directory = "bin"
+
 [configuration.values]
 light_tasking_rp2040.Max_CPUs = 1
 enet.Default_Random = "null"
