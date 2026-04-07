@@ -17,9 +17,8 @@ development.contracts = "Yes"
 
 [[depends-on]]
 sdpcm = "*"
-rp2040_hal = "^2.5.0"
+rp2040_hal = "^2.7.1"
 pico_bsp = "^2.2.0"
 
 [[pins]]
 sdpcm = { path='..' }
-rp2040_hal = { url='https://github.com/reznikmm/rp2040_hal', branch='topic/name_clash'}
