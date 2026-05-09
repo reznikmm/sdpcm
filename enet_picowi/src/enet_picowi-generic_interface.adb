@@ -73,17 +73,17 @@ package body Enet_Picowi.Generic_Interface is
    procedure Create (Self : in out Ifnet'Class) is
       Ok : Boolean ;
    begin
-      Picowi.PIO_SPI.Configure_GPIO (Power_On => True);
+      GPIO_SPI.Configure_GPIO (Power_On => True);
 
       for J in 1 .. 4 loop
-         RP.Device.Timer.Delay_Milliseconds (2);
-         Picowi.PIO_SPI.gSPI.Detect_Chip (Ok);
+         delay 0.002;
+         GPIO_SPI.gSPI.Detect_Chip (Ok);
          exit when Ok;
       end loop;
 
       pragma Assert (Ok);
 
-      Picowi.PIO_SPI.gSPI.Switch_Endian (Ok);
+      GPIO_SPI.gSPI.Switch_Endian (Ok);
       pragma Assert (Ok);
    end Create;
 
@@ -117,7 +117,7 @@ package body Enet_Picowi.Generic_Interface is
             Self.Send_Queue.Get (Output);
 
             if Net.Buffers.Is_Null (Output) then
-               RP.Device.Timer.Delay_Milliseconds (1);
+               delay 0.001;
             end if;
          end if;
 
@@ -163,7 +163,7 @@ package body Enet_Picowi.Generic_Interface is
             when SDPCM_IO.Continue =>
                null;
             when SDPCM_IO.Sleep =>
-               RP.Device.Timer.Delay_Milliseconds (Action.Milliseconds);
+               delay 0.001 * Action.Milliseconds;
             when SDPCM_IO.Complete_IO =>
                null;  --  We use synchronous I/O in this demo. Do nothing
                Net.Buffers.Release (Output);

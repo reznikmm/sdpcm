@@ -5,8 +5,8 @@
 
 with Net.Buffers;
 with Net.Interfaces;
-with Picowi.PIO_SPI;
-with RP.Timer;
+with Picowi.GPIO_SPI;
+with Ada.Real_Time;
 with SDPCM.Generic_IO;
 with System;
 
@@ -28,11 +28,11 @@ package Enet_Picowi.Generic_Interface is
 
    procedure Create (Self : in out Ifnet'Class);
 
-   procedure Send
+   overriding procedure Send
      (Self   : in out Ifnet;
       Packet : in out Net.Buffers.Buffer_Type);
 
-   procedure Receive
+   overriding procedure Receive
      (Self   : in out Ifnet;
       Packet : in out Net.Buffers.Buffer_Type);
 
@@ -42,30 +42,31 @@ private
 
    --  Timeout interface implementation
    ------------------------------------
-   use type RP.Timer.Time;
+   use type Ada.Real_Time.Time;
+   package GPIO_SPI renames Picowi.GPIO_SPI;
 
-   function New_Timeout (Second : Natural) return RP.Timer.Time is
-     (RP.Timer.Clock + RP.Timer.Ticks_Per_Second * RP.Timer.Time (Second));
+   function New_Timeout (Second : Natural) return Ada.Real_Time.Time is
+     (Ada.Real_Time.Clock + Ada.Real_Time.Seconds (Second));
 
-   function Is_Expired (Value : RP.Timer.Time) return Boolean is
-     (Value < RP.Timer.Clock);
+   function Is_Expired (Value : Ada.Real_Time.Time) return Boolean is
+     (Value < Ada.Real_Time.Clock);
 
    package Timeouts is new SDPCM.Generic_Timeouts
-     (Timeout     => RP.Timer.Time,
+     (Timeout     => Ada.Real_Time.Time,
       New_Timeout => New_Timeout,
       Is_Expired  => Is_Expired);
 
    package SPI_Bus is new SDPCM.Generic_Bus
-     (Read_Backplane_Register  => Picowi.PIO_SPI.gSPI.Read_Backplane_Register,
-      Write_Backplane_Register => Picowi.PIO_SPI.gSPI.Write_Backplane_Register,
-      Write_Prefix_Length      => Picowi.PIO_SPI.gSPI.Word'Length,
-      Write_Prefix             => Picowi.PIO_SPI.gSPI.Write_Prefix,
-      Start_Writing_WLAN       => Picowi.PIO_SPI.gSPI.Write_WLAN,
-      Start_Reading_WLAN       => Picowi.PIO_SPI.gSPI.Read_WLAN,
-      Write_Backplane          => Picowi.PIO_SPI.gSPI.Write_Backplane,
-      Is_Ready                 => Picowi.PIO_SPI.gSPI.Is_Ready,
-      Available_Packet_Length  => Picowi.PIO_SPI.gSPI.Available_Packet_Length,
-      Clear_Error              => Picowi.PIO_SPI.gSPI.Clear_Error);
+     (Read_Backplane_Register  => GPIO_SPI.gSPI.Read_Backplane_Register,
+      Write_Backplane_Register => GPIO_SPI.gSPI.Write_Backplane_Register,
+      Write_Prefix_Length      => GPIO_SPI.gSPI.Word'Length,
+      Write_Prefix             => GPIO_SPI.gSPI.Write_Prefix,
+      Start_Writing_WLAN       => GPIO_SPI.gSPI.Write_WLAN,
+      Start_Reading_WLAN       => GPIO_SPI.gSPI.Read_WLAN,
+      Write_Backplane          => GPIO_SPI.gSPI.Write_Backplane,
+      Is_Ready                 => GPIO_SPI.gSPI.Is_Ready,
+      Available_Packet_Length  => GPIO_SPI.gSPI.Available_Packet_Length,
+      Clear_Error              => GPIO_SPI.gSPI.Clear_Error);
 
    package SDPCM_IO is new SDPCM.Generic_IO
      (Bus           => SPI_Bus,

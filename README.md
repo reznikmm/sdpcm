@@ -12,6 +12,11 @@ SDPCM
 This repository provides Ada drivers for Broadcom WiFi chipsets
 using the SDPCM protocol, enabling wireless connectivity for embedded systems.
 
+# GPIO/SPI branch
+
+This branch uses CPU driven implementation of SPI (without PIO/DMA).
+It allows easier testing new HAL versions and Pico W2.
+
 ## Crates
 
 This repository contains three crates:

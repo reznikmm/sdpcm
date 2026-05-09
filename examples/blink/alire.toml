@@ -27,9 +27,13 @@ command = ["arm-eabi-objcopy", "-Obinary", "blink", "blink.bin"]
 directory = "bin"
 
 [[depends-on]]
-pico_bsp = "^2.2.0"
 picowi = "*"
 sdpcm = "*"
+light_tasking_rp2040 = "*"
+
+[configuration.values]
+light_tasking_rp2040.Board = "rpi_pico"
+light_tasking_rp2040.Max_CPUs = 1
 
 [[pins]]
 picowi = { path='../../picowi' }

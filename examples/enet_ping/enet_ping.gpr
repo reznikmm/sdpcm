@@ -29,7 +29,7 @@ project Enet_Ping is
    end Install;
 
    package Linker is
-     for Switches ("Ada") use
+      for Switches ("Ada") use
         Runtime_Build.Linker_Switches &
         ("-Wl,--gc-sections",
          "-Wl,-Map=map.txt",

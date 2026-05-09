@@ -16,10 +16,6 @@ with Net.Protos.Icmp;
 with Net.Protos.IPv4;
 with Net.Utils;
 
-with Pico;
-with RP.Clock;
-with RP.Device;
-
 procedure Enet_Ping is
    use type Net.Ip_Addr;
 
@@ -56,9 +52,6 @@ procedure Enet_Ping is
    Seq             : Net.Uint16 := 0;
 
 begin
-   RP.Clock.Initialize (Pico.XOSC_Frequency);
-   RP.Device.Timer.Enable;
-
    Ada.Text_IO.Put_Line ("Boot");
 
    Global.Initialize;
