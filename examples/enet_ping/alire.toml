@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 name = "enet_ping"
-description = "Ping example with ENet IP stack and light_tasking_rp2040 runtime"
+description = "Ping example with ENet IP stack and light_tasking_rp2350 runtime"
 version = "0.1.0-dev"
 
 authors = ["Max Reznik"]
@@ -16,7 +16,7 @@ tags = []
 executables = ["enet_ping"]
 
 [[depends-on]]
-light_tasking_rp2040 = "*"
+light_tasking_rp2350 = "*"
 enet_picowi = "~0.1.0-dev"
 
 [[pins]]
@@ -28,6 +28,8 @@ command = ["arm-eabi-objcopy", "-Obinary", "enet_ping", "enet_ping.bin"]
 directory = "bin"
 
 [configuration.values]
-light_tasking_rp2040.Max_CPUs = 1
-light_tasking_rp2040.Board = "rpi_pico"
+light_tasking_rp2350.Max_CPUs = 1
+light_tasking_rp2350.Board = "rpi_pico2"
 enet.Default_Random = "null"
+rp2040_hal.Device = "RP2350A"
+

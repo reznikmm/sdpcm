@@ -29,11 +29,12 @@ directory = "bin"
 [[depends-on]]
 picowi = "*"
 sdpcm = "*"
-light_tasking_rp2040 = "*"
+light_tasking_rp2350 = "*"
 
 [configuration.values]
-light_tasking_rp2040.Board = "rpi_pico"
-light_tasking_rp2040.Max_CPUs = 1
+light_tasking_rp2350.Board = "rpi_pico2"
+light_tasking_rp2350.Max_CPUs = 1
+rp2040_hal.Device = "RP2350A"
 
 [[pins]]
 picowi = { path='../../picowi' }
