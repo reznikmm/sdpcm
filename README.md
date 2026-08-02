@@ -268,3 +268,10 @@ mixing free with non-free code.
 
 This project is licensed under the MIT License. See the `LICENSES/` directory
 for full licensing information.
+
+## References
+
+The first version of this software was made after reading
+[jbentham's picowi brilliant blog](https://iosoft.blog/2022/12/06/picowi/).
+Thank you, [jbentham](https://github.com/jbentham)!
+
