@@ -101,7 +101,7 @@ package body SDPCM.IOCTL is
    begin
       if From /= 1 + Output.Data'Position then
          declare
-            First : Positive := 1 + Output.Data'Position;
+            First : constant Positive := 1 + Output.Data'Position;
             Last  : Positive := First + To - From;
          begin
             Buffer (First .. Last) := Buffer (From .. To);
@@ -111,7 +111,7 @@ package body SDPCM.IOCTL is
             return;
          end;
       elsif To /= (To + 3) / 4 * 4 then
-        Send_Buffer (Buffer, From, (To + 3) / 4 * 4);
+         Send_Buffer (Buffer, From, (To + 3) / 4 * 4);
          return;
       end if;
 

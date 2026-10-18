@@ -7,7 +7,6 @@ pragma Ada_2022;
 with Ada.Unchecked_Conversion;
 
 with SDPCM.Events;
-with SDPCM.Generic_IO;
 with SDPCM.IOCTL;
 with SDPCM.Packets;
 
@@ -875,7 +874,6 @@ package body SDPCM.Generic_IO is
       Found  : out Boolean)
    is
       use type IOCTL.Command;
-      use type Packets.SDPCM_Channel;
 
       Got : Packets.Packet;
    begin
@@ -891,12 +889,13 @@ package body SDPCM.Generic_IO is
                Event_Length : constant Positive :=
                  SDPCM.Events.Event_Record'Size / 8;
 
-               subtype Event_Record_Raw is Buffer_Byte_Array (1 .. Event_Length);
+               subtype Event_Record_Raw is
+                 Buffer_Byte_Array (1 .. Event_Length);
 
                function To_Event_Record is new Ada.Unchecked_Conversion
                  (Event_Record_Raw, SDPCM.Events.Event_Record);
 
-               Event : SDPCM.Events.Event_Record :=
+               Event : constant SDPCM.Events.Event_Record :=
                  (if Buffer'Last - Got.Offset + 1 >= Event_Length
                   then To_Event_Record
                     (Buffer (Got.Offset .. Got.Offset + Event_Length - 1))
