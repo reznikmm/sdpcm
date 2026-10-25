@@ -118,6 +118,41 @@ package SDPCM is
    --  * @enum NVRAM - NVRAM configuration
    --  * @enum CLM_Blob - CLM blob for regulatory compliance
 
+   type Chip_Profile is record
+      RAM_Size      : Interfaces.Unsigned_32;
+      --  Size of the chip RAM. NVRAM is placed at the end of it.
+
+      Has_CLM       : Boolean;
+      --  The firmware expects a CLM blob upload
+
+      Has_KSO       : Boolean;
+      --  The chip has Keep SDIO On (KSO) bit in the sleep CSR register
+
+      Has_SDIO_Core : Boolean;
+      --  Configure SDIO core (host and function interrupt masks, function 2
+      --  watermark) after the firmware start. Required on SDIO bus.
+
+      Ready_Timeout : Positive;
+      --  Time (milliseconds) to wait for the firmware to become ready
+   end record;
+   --  Chip specific parameters of the start sequence
+
+   CYW43439 : constant Chip_Profile :=
+     (RAM_Size      => 16#8_0000#,
+      Has_CLM       => True,
+      Has_KSO       => True,
+      Has_SDIO_Core => False,
+      Ready_Timeout => 100);
+   --  Raspberry Pi Pico W (gSPI bus)
+
+   BCM43362 : constant Chip_Profile :=
+     (RAM_Size      => 16#3_C000#,
+      Has_CLM       => False,
+      Has_KSO       => False,
+      Has_SDIO_Core => True,
+      Ready_Timeout => 1000);
+   --  EMW3165 and other similar modules (SDIO bus)
+
    generic
       with function SSID return String;
       --  Get SSID for the network to connect to.

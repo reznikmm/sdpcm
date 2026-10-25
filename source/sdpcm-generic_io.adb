@@ -19,6 +19,7 @@ package body SDPCM.Generic_IO is
       Chip_Clock_CSR : constant := 16#1000e#;  --  Chip clock ctrl
       Pull_Up        : constant := 16#1000f#;
       Sleep_CSR      : constant := 16#1001f#;
+      Function_2_Watermark : constant := 16#10008#;
       GPIO_Out_En    : constant := 16#8068#;
       GPIO_Out       : constant := 16#8064#;
    end Backplane_Register;
@@ -74,6 +75,9 @@ package body SDPCM.Generic_IO is
          IOCTL_Set_32,
          Wait_Is_Ready,
          Clear_Error,
+         Write_NVRAM_Size,
+         Configure_SDIO_Core,
+         Set_KSO,
          Sleep);
 
       type Step (Kind : Step_Kind := Sleep) is record
@@ -104,6 +108,9 @@ package body SDPCM.Generic_IO is
                      | IOCTL_Set_32
                      | Wait_Is_Ready
                      | Clear_Error
+                     | Write_NVRAM_Size
+                     | Configure_SDIO_Core
+                     | Set_KSO
                      | Sleep
                    =>
                      null;
@@ -112,7 +119,12 @@ package body SDPCM.Generic_IO is
             when Upload_Firmware =>
                Firmware : Resource_Kind range Standard.SDPCM.Firmware .. NVRAM;
 
-            when Upload_CLM | Clear_Error =>
+            when Upload_CLM
+               | Clear_Error
+               | Write_NVRAM_Size
+               | Configure_SDIO_Core
+               | Set_KSO
+            =>
                null;
 
             when IOCTL_Get | IOCTL_Set | IOCTL_Set_32 =>
@@ -146,6 +158,9 @@ package body SDPCM.Generic_IO is
       AI_IOCTRL_OSET    : constant := 16#408#;
       AI_RESETCTRL_OSET : constant := 16#800#;
       RAM_Core_Base : constant Interfaces.Unsigned_32 := 16#4000#;
+      SDIO_Core_Base : constant Interfaces.Unsigned_32 := 16#2000#;
+      SDIO_Host_Interrupt_Mask     : constant := 16#24#;
+      SDIO_Function_Interrupt_Mask : constant := 16#34#;
       ARM_Core_Base : constant Interfaces.Unsigned_32 := 16#3000#;
 
       Start : constant Step_Array :=
@@ -240,9 +255,7 @@ package body SDPCM.Generic_IO is
            (Kind         => Executor.Upload_Firmware,
             Firmware     => NVRAM),
            --  21 =>
-           (Kind         => Executor.Write_Register_Variable,
-            Address      => 16#FFFC#,  --  NVRAM size register
-            Length       => 4),
+           (Kind         => Executor.Write_NVRAM_Size),
          --  Reset (ARM)
          --  22 =>
            (Kind         => Write_Register,
@@ -289,6 +302,8 @@ package body SDPCM.Generic_IO is
             Mask         => 16#80#,
             Length       => 1,
             Trys         => 50),
+         --  31 + 1 =>
+           (Kind         => Executor.Configure_SDIO_Core),
          --  32 =>
            (Kind => Executor.Wait_Is_Ready,
             Milliseconds => 100),
@@ -331,19 +346,7 @@ package body SDPCM.Generic_IO is
            (Kind => Clear_Error),
          --  Set sleep KSO (should poll to check for success)
          --  42 =>
-           (Kind         => Write_Register,
-            Address      => Backplane_Register.Sleep_CSR,
-            Value        => 1,
-            Length       => 1),
-         --  43 =>
-           (Kind         => Write_Register,
-            Address      => Backplane_Register.Sleep_CSR,
-            Value        => 1,
-            Length       => 1),
-         --  44 =>
-           (Kind         => Read_Register,
-            Address      => Backplane_Register.Sleep_CSR,
-            Length       => 1),
+           (Kind         => Set_KSO),
          --  45 =>
            (Kind         => IOCTL_Set,
             Variable     => IOCTL.country,
@@ -491,6 +494,11 @@ package body SDPCM.Generic_IO is
 
       Block_Size  : constant := 64;
       Window_Size : constant := 16#8000#;
+
+      function NVRAM_Address return Interfaces.Unsigned_32 is
+        (Chip.RAM_Size - 4 - Interfaces.Unsigned_32 (NVRAM_Size));
+      --  NVRAM ends just before the last word of RAM (NVRAM size tag). A
+      --  function, not a constant, to keep the unit preelaborable.
       Load_Size   : constant := 512;
 
       procedure Upload_Firmware
@@ -572,7 +580,51 @@ package body SDPCM.Generic_IO is
                Upload_Firmware (Step.Firmware, Offset, Buffer);
 
             when Upload_CLM =>
-               Upload_CLM_Blob (Offset, Buffer, Command);
+               if Chip.Has_CLM then
+                  Upload_CLM_Blob (Offset, Buffer, Command);
+               end if;
+
+            when Write_NVRAM_Size =>
+               --  The last word of RAM, 32-bit access. The window has been
+               --  set by NVRAM upload: NVRAM ends just before this word.
+               Bus.Write_Backplane_Register
+                 (Address => (Chip.RAM_Size - 4) mod Window_Size + 16#8000#,
+                  Length  => 4,
+                  Value   => Custom_Value);
+
+            when Configure_SDIO_Core =>
+               if Chip.Has_SDIO_Core then
+                  Bus.Write_Backplane_Register
+                    (Address => Backplane_Register.Win_Addr,
+                     Length  => 3,
+                     Value   => 16#1800_0000# / 256);
+
+                  Bus.Write_Backplane_Register
+                    (Address => SDIO_Core_Base + SDIO_Host_Interrupt_Mask
+                                  + 16#8000#,
+                     Length  => 4,
+                     Value   => 16#F0#);  --  I_HMB_SW_MASK
+
+                  Bus.Write_Backplane_Register
+                    (Address => SDIO_Core_Base + SDIO_Function_Interrupt_Mask,
+                     Length  => 1,
+                     Value   => 2);
+
+                  Bus.Write_Backplane_Register
+                    (Address => Backplane_Register.Function_2_Watermark,
+                     Length  => 1,
+                     Value   => 8);
+               end if;
+
+            when Set_KSO =>
+               if Chip.Has_KSO then
+                  Bus.Write_Backplane_Register
+                    (Backplane_Register.Sleep_CSR, 1, 1);
+                  Bus.Write_Backplane_Register
+                    (Backplane_Register.Sleep_CSR, 1, 1);
+                  Bus.Read_Backplane_Register
+                    (Backplane_Register.Sleep_CSR, 1, Value);
+               end if;
 
             when IOCTL_Get =>
                Command := Step.Command;
@@ -617,7 +669,9 @@ package body SDPCM.Generic_IO is
             when Wait_Is_Ready =>
                if Value = 1 then
                   Increment_Step;
-               elsif Offset < Step.Milliseconds then
+               elsif Offset < Natural'Max
+                 (Step.Milliseconds, Chip.Ready_Timeout)
+               then
                   Offset := Offset + 1;
                else
                   Success := False;
@@ -790,7 +844,7 @@ package body SDPCM.Generic_IO is
             Last);
 
          --  Calculate write Address
-         Value := (if Kind = Firmware then 0 else 16#7_FCFC#) +
+         Value := (if Kind = Firmware then 0 else NVRAM_Address) +
            Interfaces.Unsigned_32 (Offset);
 
          if Last in Block_Range then
@@ -1056,7 +1110,8 @@ package body SDPCM.Generic_IO is
          Buffer       => Buffer,
          Success      => Ok,
          Command      => IOCTL.Command (State.Command),
-         Custom_Value => Packets.Make_Tag (16#300# / 4));
+         Custom_Value =>
+           Packets.Make_Tag (Interfaces.Unsigned_16 (NVRAM_Size / 4)));
 
       if State.Step not in Executor.Start'Range then
          State.Joining := (Kind => Idle);

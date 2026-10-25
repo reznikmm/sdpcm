@@ -35,6 +35,14 @@ generic
 
    with package Network is new SDPCM.Generic_Network (<>);
 
+   Chip : Chip_Profile := CYW43439;
+   --  Chip specific parameters of the start sequence
+
+   NVRAM_Size : Positive := 16#300#;
+   --  Size of NVRAM area in the chip RAM (bytes, multiple of 4). It must be
+   --  not less than the NVRAM resource length. NVRAM is placed just before
+   --  the last word of the chip RAM.
+
 package SDPCM.Generic_IO is
    pragma Preelaborate;
 
