@@ -3,9 +3,12 @@
 --  SPDX-License-Identifier: MIT
 ----------------------------------------------------------------
 
+with Ada.Real_Time;
 with Interfaces;
 with System;
 
+with SDPCM.Generic_IO;
+with SDPCM.Generic_Mapped_Read_Resource;
 with SDPCM.Generic_SDIO;
 
 with STM32.GPIO;
@@ -103,6 +106,59 @@ procedure EMW3165 is
 
    package Bus is new SDPCM.Generic_SDIO
      (Read_Write_Direct, Read_Write_Extended, Sleep);
+
+   package SDIO_Bus is new SDPCM.Generic_Bus
+     (Read_Backplane_Register  => Bus.Read_Backplane_Register,
+      Write_Backplane_Register => Bus.Write_Backplane_Register,
+      Write_Prefix_Length      => Bus.Write_Prefix_Length,
+      Write_Prefix             => Bus.Write_Prefix,
+      Start_Writing_WLAN       => Bus.Write_WLAN,
+      Start_Reading_WLAN       => Bus.Read_WLAN,
+      Write_Backplane          => Bus.Write_Backplane,
+      Is_Ready                 => Bus.Is_Ready,
+      Available_Packet_Length  => Bus.Available_Packet_Length,
+      Clear_Error              => Bus.Clear_Error);
+
+   --  Timeout interface implementation
+   ------------------------------------
+   use type Ada.Real_Time.Time;
+
+   function New_Timeout (Second : Natural) return Ada.Real_Time.Time is
+     (Ada.Real_Time.Clock + Ada.Real_Time.Seconds (Second));
+
+   function Is_Expired (Value : Ada.Real_Time.Time) return Boolean is
+     (Value < Ada.Real_Time.Clock);
+
+   package Timeouts is new SDPCM.Generic_Timeouts
+     (Timeout     => Ada.Real_Time.Time,
+      New_Timeout => New_Timeout,
+      Is_Expired  => Is_Expired);
+
+   --  Firmware read APU implementation
+   -------------------------------------
+
+   procedure Read_Resource is new SDPCM.Generic_Mapped_Read_Resource
+     (Address         => System'To_Address (16#08040000#),
+      Firmware_Length => 210432,
+      NVRAM_Length    => 1024,
+      CLM_Blob_Length => 0);
+
+   --  Network interface implementation
+   ------------------------------------
+   function SSID return String is ("guest");
+
+   function Password return String is ("guest123");
+
+   package Network is new SDPCM.Generic_Network
+     (SSID, Password, Security => SDPCM.WPA2_AES);
+
+   package SDPCM_IO is new SDPCM.Generic_IO
+     (Bus           => SDIO_Bus,
+      Timeouts      => Timeouts,
+      Read_Resource => Read_Resource,
+      Network       => Network,
+      Chip          => SDPCM.BCM43362,
+      NVRAM_Size    => 1024);
 
    function IO_Read_Write_Direct
      (Write    : Boolean;
@@ -240,6 +296,9 @@ procedure EMW3165 is
    end Write_Byte;
 
    Ok : Boolean;
+   Buffer : SDPCM.Buffer_Byte_Array (1 .. 1600);
+   State  : SDPCM_IO.State;
+   --  Prev   : RP.Timer.Time;
 begin
    UART.Configure
      (TX   => UART_TX,
@@ -280,6 +339,32 @@ begin
    end;
 
    loop
-      delay 1.0;
+      declare
+         use all type SDPCM_IO.Action_Kind;
+         Action : SDPCM_IO.Action;
+      begin
+         SDPCM_IO.Poll
+           (State,
+            Buffer,
+            Action => Action);
+
+         if Action.Kind = Process_Packet then
+            UART.Put
+              ("Got " & Integer'Image (Action.Span.To - Action.Span.From + 1));
+         end if;
+
+         case Action.Kind is
+            when SDPCM_IO.Idle =>
+               delay 0.001;
+            when SDPCM_IO.Continue =>
+               null;
+            when SDPCM_IO.Sleep =>
+               delay 0.0001 * Action.Milliseconds;
+            when SDPCM_IO.Complete_IO =>
+               null;  --  We use synchronous I/O in this demo. Do nothing
+            when SDPCM_IO.Process_Packet =>
+               null;
+         end case;
+      end;
    end loop;
 end EMW3165;

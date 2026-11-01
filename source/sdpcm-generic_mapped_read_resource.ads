@@ -9,7 +9,7 @@ generic
    Address         : System.Address;
    Firmware_Length : Positive;
    NVRAM_Length    : Positive;
-   CLM_Blob_Length : Positive;
+   CLM_Blob_Length : Natural;
 procedure SDPCM.Generic_Mapped_Read_Resource
   (Kind   : Resource_Kind;
    Offset : Natural;
