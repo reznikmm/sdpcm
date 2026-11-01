@@ -232,7 +232,7 @@ openocd -f board/pico-debug.cfg
 repository for intellectual property reasons, i.e. to avoid unnecessarily
 mixing free with non-free code.
 
-### Information on downloading and flashing firmware.
+### Information on downloading and flashing Pico W firmware.
 
 * Version: 7.95.49 (2271bb6 CY) CRC: b7a28ef3 Date: Mon 2021-11-29 22:50:27 PST Ucode Ver: 1043.2162 FWID 01-c51d9400
   * Source: https://github.com/georgerobotics/cyw43-driver
@@ -263,6 +263,20 @@ mixing free with non-free code.
     * Source: https://github.com/Infineon/wifi-resources/raw/refs/tags/release-v2.0.4/clm/COMPONENT_WIFI5/COMPONENT_43439/COMPONENT_MURATA-1YN/43439A0.clm_blob
   * NVRAM: N/A
   * **I haven't tried it yet**.
+
+### Flashing BCM43362 firmware on EMW3165
+
+1. Pad BCM43362 firmware to 64 block (I have 210432 bytes)
+1. Pad NVRAM to 64 block (I have 1024 bytes)
+2. Flash BCM43362 firmware and NVRAM content at the end of STM32 flash:
+
+```bash
+truncate -s %64 43362A2.bin
+truncate -s %64 nvram.bin
+ls -l 43362A2.bin
+cat 43362A2.bin nvram.bin > fw.bin
+st-flash --connect-under-reset write fw.bin 0x08040000
+```
 
 ## License
 

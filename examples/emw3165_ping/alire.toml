@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-name = "emw3165"
-description = "WiFi demo for EMW3165 (STM32F411/BCM43362)"
+name = "emw3165_ping"
+description = "Ping example with ENet IP stack for EMW3165 (STM32F411/BCM43362)"
 version = "0.1.0-dev"
 
 authors = ["Max Reznik"]
@@ -13,7 +13,7 @@ licenses = "MIT"
 website = ""
 tags = []
 
-executables = ["emw3165"]
+executables = ["emw3165_ping"]
 
 [build-switches]
 development.optimization = ["-O0"]
@@ -39,6 +39,7 @@ light_tasking_stm32f4xx = { url="https://github.com/reznikmm/community-bb-runtim
 
 [configuration.values]
 aa_stm32_drivers.aa_mcu = "stm32f411"
+enet.Default_Random = "null"
 
 light_tasking_stm32f4xx.MCU_Sub_Family      = "F411"
 # Configure a 26 MHz HSE crystal oscillator
@@ -62,7 +63,9 @@ light_tasking_stm32f4xx.APB1_Pre = "DIV2"
 light_tasking_stm32f4xx.APB2_Pre = "DIV1"
 
 [[depends-on]]
-sdpcm = "~0.1.0-dev"
+enet_bcm43362 = "~0.1.0-dev"
 
 [[pins]]
+enet_bcm43362 = { path='../../enet_bcm43362' }
 sdpcm = { path='../..' }
+enet = { url='https://github.com/stcarrez/ada-enet' }

@@ -1,0 +1,33 @@
+name = "enet_bcm43362"
+description = "ENet WiFi driver for BCM43362 on STM32F4 SDIO (EMW3165 etc)"
+version = "0.1.0-dev"
+
+authors = ["Max Reznik"]
+maintainers = ["Max Reznik <reznikmm@gmail.com>"]
+maintainers-logins = ["reznikmm"]
+licenses = "MIT"
+website = "https://github.com/reznikmm/sdpcm"
+tags = ["driver", "network", "wireless", "stm32"]
+
+[build-switches]
+development.optimization = ["-O0"]
+development.style_checks = ["-gnaty"]
+development.contracts = "Yes"
+"*".debug_info = "Yes"
+
+[[depends-on]]
+sdpcm = "~0.1.0-dev"
+enet = "^1.1"
+aa_stm32_drivers = "~0.1.0"
+light_tasking_stm32f4xx = "*"
+
+[[pins]]
+sdpcm = { path='..' }
+enet = { url='https://github.com/stcarrez/ada-enet' }
+aa_stm32_drivers = { url="https://github.com/reznikmm/aa_stm32_drivers" }
+light_tasking_stm32f4xx = { url="https://github.com/reznikmm/community-bb-runtimes", subdir="light-tasking-stm32f4xx", branch="16.0.0" }
+
+[configuration.values]
+enet.Default_Random = "null"
+aa_stm32_drivers.aa_mcu = "stm32f411"
+light_tasking_stm32f4xx.MCU_Sub_Family = "F411"
