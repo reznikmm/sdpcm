@@ -49,9 +49,34 @@ package body SDPCM.Generic_SDIO is
 
    Maximum_Block_Count : constant := 511;
 
+   Minimum_Chunk : constant := 16;
+   --  The smallest byte mode transfer for asynchronous CMD53 (four words,
+   --  a DMA burst)
+
    Failed      : Boolean := False;
    Tag_Pending : Boolean := False;
    Tag         : Interfaces.Unsigned_32 := 0;
+
+   type Transfer_Kind is (None, Writing, Reading);
+
+   Pending     : Transfer_Kind := None;
+   --  Kind of the asynchronous transfer in progress
+
+   Tail_Data   : System.Address;
+   Tail_Length : Natural := 0;
+   --  The rest of the frame (less than a block) to be read by
+   --  Complete_Transfer after the asynchronous block read
+
+   function Power_Of_Two
+     (Value   : Positive;
+      Minimum : Positive) return Positive;
+   --  The smallest power of two not less than Value and Minimum
+
+   procedure Read_Tail
+     with Pre => Tail_Length > 0;
+   --  Read Tail_Length bytes of the frame to Tail_Data with one byte mode
+   --  CMD53. The transfer length is rounded up to a power of two, extra
+   --  bytes are dropped (the device pads the frame).
 
    subtype Function_Number is Interfaces.Unsigned_32 range 0 .. 7;
 
@@ -158,6 +183,7 @@ package body SDPCM.Generic_SDIO is
          --  The tag could be read at any time, it is zero if there is no
          --  frame available.
          Tag := 0;
+
          Extended
            (Write      => False,
             Number     => Number (WLAN),
@@ -179,11 +205,13 @@ package body SDPCM.Generic_SDIO is
 
       if Length = 0 or (Length xor Check) /= 16#FFFF# or Length < 4 then
          Tag_Pending := False;
-         return 0;
-      end if;
 
-      Tag_Pending := True;
-      return Length;
+         return 0;
+      else
+         Tag_Pending := True;
+
+         return Length;
+      end if;
    end Available_Packet_Length;
 
    -----------------
@@ -229,6 +257,34 @@ package body SDPCM.Generic_SDIO is
    ----------------
    -- Has_Failed --
    ----------------
+
+   -----------------------
+   -- Complete_Transfer --
+   -----------------------
+
+   procedure Complete_Transfer
+     (Response : Interfaces.Unsigned_32;
+      Success  : Boolean)
+   is
+      Ok : constant Boolean :=
+        Success and (Response and R5_Error_Flags) = 0;
+   begin
+      Mark (Ok);
+
+      case Pending is
+         when Reading =>
+            Pending := None;
+
+            if not Ok then
+               Abort_Read;
+            elsif Tail_Length > 0 then
+               Read_Tail;
+            end if;
+
+         when Writing | None =>
+            Pending := None;
+      end case;
+   end Complete_Transfer;
 
    function Has_Failed return Boolean is (Failed);
 
@@ -332,6 +388,8 @@ package body SDPCM.Generic_SDIO is
    -- Is_Ready --
    --------------
 
+   function Is_Transfer_Pending return Boolean is (Pending /= None);
+
    function Is_Ready return Boolean is
       Value   : Interfaces.Unsigned_8;
       Success : Boolean;
@@ -410,6 +468,53 @@ package body SDPCM.Generic_SDIO is
       Mark (Success);
    end Read_Byte;
 
+   ------------------
+   -- Power_Of_Two --
+   ------------------
+
+   function Power_Of_Two
+     (Value   : Positive;
+      Minimum : Positive) return Positive
+   is
+      Result : Positive := Minimum;
+   begin
+      while Result < Value loop
+         Result := Result * 2;
+      end loop;
+
+      return Result;
+   end Power_Of_Two;
+
+   ---------------
+   -- Read_Tail --
+   ---------------
+
+   procedure Read_Tail is
+      Rest    : Buffer_Byte_Array (1 .. Tail_Length)
+        with Import, Address => Tail_Data;
+      Chunk   : constant Positive := Power_Of_Two (Tail_Length, 4);
+      Word    : Buffer_Byte_Array (1 .. Block_Size) := (others => 0);
+      Success : Boolean;
+   begin
+      Extended
+        (Write      => False,
+         Number     => Number (WLAN),
+         Block_Mode => False,
+         Address    => 0,
+         Count      => Chunk,
+         Block_Size => Chunk,
+         Data       => Word'Address,
+         Success    => Success);
+
+      if Success then
+         Rest := Word (1 .. Tail_Length);
+      else
+         Abort_Read;
+      end if;
+
+      Tail_Length := 0;
+   end Read_Tail;
+
    ---------------
    -- Read_WLAN --
    ---------------
@@ -418,8 +523,8 @@ package body SDPCM.Generic_SDIO is
       Tag_Bytes : Buffer_Byte_Array (1 .. 4)
         with Import, Address => Tag'Address;
 
-      First   : Positive := Value'First;
-      Success : Boolean;
+      First  : Positive := Value'First;
+      Blocks : Natural;
    begin
       if Tag_Pending and Value'Length >= 4 then
          Value (First .. First + 3) := Tag_Bytes;
@@ -431,16 +536,31 @@ package body SDPCM.Generic_SDIO is
          return;
       end if;
 
-      Transfer_Exactly
-        (Write   => False,
-         Number  => Number (WLAN),
-         Address => 0,
-         Data    => Value (First)'Address,
-         Length  => Value'Last - First + 1,
-         Success => Success);
+      Blocks := Natural'Min
+        ((Value'Last - First + 1) / Block_Size, Maximum_Block_Count);
 
-      if not Success then
-         Abort_Read;
+      Tail_Length := Value'Last - First + 1 - Blocks * Block_Size;
+
+      if Tail_Length > 0 then
+         Tail_Data := Value (First + Blocks * Block_Size)'Address;
+      end if;
+
+      if Blocks > 0 then
+         Pending := Reading;
+
+         Start_IO_Read_Write_Extended
+           (Argument   =>
+              Extended_Argument
+                (Write      => False,
+                 Number     => Number (WLAN),
+                 Block_Mode => True,
+                 Address    => 0,
+                 Count      => Interfaces.Unsigned_32 (Blocks)),
+            Block_Size => Block_Size,
+            Length     => Blocks * Block_Size,
+            Data       => Value (First)'Address);
+      elsif Tail_Length > 0 then
+         Read_Tail;
       end if;
    end Read_WLAN;
 
@@ -677,36 +797,38 @@ package body SDPCM.Generic_SDIO is
    ----------------
 
    procedure Write_WLAN (Value : Buffer_Byte_Array) is
-      Ignore  : Boolean;  --  Has_Failed reports errors
-      Length  : constant Positive := Value'Length;
-      Chunk   : Positive := 4;
+      Length : constant Positive := Value'Length;
+      Blocks : constant Positive := (Length + Block_Size - 1) / Block_Size;
+      Chunk  : constant Positive := Power_Of_Two (Length, Minimum_Chunk);
    begin
       --  One CMD53 per frame, padded up to the block size or to a power of
       --  two in byte mode (the STM32 data path works with blocks only).
-      if Length >= Block_Size then
-         Extended
-           (Write      => True,
-            Number     => Number (WLAN),
-            Block_Mode => True,
-            Address    => 0,
-            Count      => (Length + Block_Size - 1) / Block_Size,
-            Block_Size => Block_Size,
-            Data       => Value'Address,
-            Success    => Ignore);
-      else
-         while Chunk < Length loop
-            Chunk := Chunk * 2;
-         end loop;
+      Pending := Writing;
 
-         Extended
-           (Write      => True,
-            Number     => Number (WLAN),
-            Block_Mode => False,
-            Address    => 0,
-            Count      => Chunk,
+      if Length >= Block_Size then
+         Start_IO_Read_Write_Extended
+           (Argument   =>
+              Extended_Argument
+                (Write      => True,
+                 Number     => Number (WLAN),
+                 Block_Mode => True,
+                 Address    => 0,
+                 Count      => Interfaces.Unsigned_32 (Blocks)),
+            Block_Size => Block_Size,
+            Length     => Blocks * Block_Size,
+            Data       => Value'Address);
+      else
+         Start_IO_Read_Write_Extended
+           (Argument   =>
+              Extended_Argument
+                (Write      => True,
+                 Number     => Number (WLAN),
+                 Block_Mode => False,
+                 Address    => 0,
+                 Count      => Interfaces.Unsigned_32 (Chunk)),
             Block_Size => Chunk,
-            Data       => Value'Address,
-            Success    => Ignore);
+            Length     => Chunk,
+            Data       => Value'Address);
       end if;
    end Write_WLAN;
 
