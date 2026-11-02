@@ -11,12 +11,8 @@ with SDPCM.Generic_IO;
 with System;
 
 generic
-   with procedure Read_Resource
-     (Kind   : SDPCM.Resource_Kind;
-      Offset : Natural;
-      Data   : out SDPCM.Byte_Array;
-      Last   : out Natural);
-   --  Generic read firmware procedure
+   with package Resources is new SDPCM.Generic_Resources (<>);
+   --  Firmware, NVRAM and CLM blob
 
    with package Network is new SDPCM.Generic_Network (<>);
    --  Generic SSID/Password access interface
@@ -70,7 +66,7 @@ private
    package SDPCM_IO is new SDPCM.Generic_IO
      (Bus           => SPI_Bus,
       Timeouts      => Timeouts,
-      Read_Resource => Read_Resource,
+      Resources     => Resources,
       Network       => Network);
 
    protected type Buffer_Queue

@@ -24,6 +24,10 @@ package body SDPCM.Generic_IO is
       GPIO_Out       : constant := 16#8064#;
    end Backplane_Register;
 
+   function NVRAM_Size return Positive is
+     ((Resources.Length (NVRAM) + 3) / 4 * 4);
+   --  Size of NVRAM area in the chip RAM (bytes, multiple of 4)
+
    procedure IOCTL_Set_In_Place is new IOCTL.Set_In_Place (Bus);
    procedure IOCTL_Send_Buffer is new IOCTL.Send_Buffer (Bus);
 
@@ -723,7 +727,7 @@ package body SDPCM.Generic_IO is
 
       begin
          if Offset /= Natural'Last then
-            Read_Resource
+            Resources.Read
               (CLM_Blob,
                Offset,
                Byte_Array (Buffer (Data .. To)),
@@ -763,7 +767,7 @@ package body SDPCM.Generic_IO is
          Last  : Natural;
          Value : Interfaces.Unsigned_32;
       begin
-         Read_Resource
+         Resources.Read
            (Kind,
             Offset,
             Byte_Array (Buffer (Block_Range)),

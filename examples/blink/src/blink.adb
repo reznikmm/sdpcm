@@ -17,7 +17,7 @@ with RP.Clock;
 
 with Picowi.PIO_SPI;
 
-with SDPCM.Generic_Mapped_Read_Resource;
+with SDPCM.Generic_Mapped_Resources;
 with SDPCM.Generic_IO;
 
 with WiFi_Credentials;
@@ -57,7 +57,7 @@ procedure Blink is
    --  Resource interface implementation
    -------------------------------------
 
-   procedure Read_Resource is new SDPCM.Generic_Mapped_Read_Resource
+   package Firmware is new SDPCM.Generic_Mapped_Resources
      (Address         => System'To_Address (16#101c0000#),
       Firmware_Length => 224192,
       NVRAM_Length    => 16#300#,
@@ -72,10 +72,10 @@ procedure Blink is
       Security => SDPCM.WPA2_AES);
 
    package SDPCM_IO is new SDPCM.Generic_IO
-     (Bus           => SPI_Bus,
-      Timeouts      => Timeouts,
-      Read_Resource => Read_Resource,
-      Network       => Network);
+     (Bus       => SPI_Bus,
+      Timeouts  => Timeouts,
+      Resources => Firmware.Resources,
+      Network   => Network);
 
    Ok : Boolean;
 

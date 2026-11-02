@@ -118,6 +118,23 @@ package SDPCM is
    --  * @enum NVRAM - NVRAM configuration
    --  * @enum CLM_Blob - CLM blob for regulatory compliance
 
+   generic
+      with procedure Read
+        (Kind   : Resource_Kind;
+         Offset : Natural;
+         Data   : out Byte_Array;
+         Last   : out Natural);
+      --  Read a part of the resource of given Kind starting from Offset into
+      --  Data. Last is the index of the last byte written into Data. Last is
+      --  less than Data'First at the end of the resource.
+
+      with function Length (Kind : Resource_Kind) return Natural;
+      --  Length of the resource of given Kind in bytes
+
+   package Generic_Resources is
+      --  Abstract interface to firmware resources (firmware, NVRAM, CLM blob)
+   end Generic_Resources;
+
    type Chip_Profile is record
       RAM_Size      : Interfaces.Unsigned_32;
       --  Size of the chip RAM. NVRAM is placed at the end of it.

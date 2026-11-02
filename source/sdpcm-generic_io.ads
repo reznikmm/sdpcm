@@ -26,22 +26,15 @@ generic
 
    with package Timeouts is new SDPCM.Generic_Timeouts (<>);
 
-   with procedure Read_Resource
-     (Kind   : Resource_Kind;
-      Offset : Natural;
-      Data   : out Byte_Array;
-      Last   : out Natural);
-   --  Generic Resources Interface. Read resource of given kind.
+   with package Resources is new SDPCM.Generic_Resources (<>);
+   --  Firmware, NVRAM and CLM blob. NVRAM length defines the size of NVRAM
+   --  area in the chip RAM. NVRAM is placed just before the last word of
+   --  the chip RAM.
 
    with package Network is new SDPCM.Generic_Network (<>);
 
    Chip : Chip_Profile := CYW43439;
    --  Chip specific parameters of the start sequence
-
-   NVRAM_Size : Positive := 16#300#;
-   --  Size of NVRAM area in the chip RAM (bytes, multiple of 4). It must be
-   --  not less than the NVRAM resource length. NVRAM is placed just before
-   --  the last word of the chip RAM.
 
 package SDPCM.Generic_IO is
    pragma Preelaborate;

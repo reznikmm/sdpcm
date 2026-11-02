@@ -63,47 +63,60 @@ package, you need to provide two key interfaces:
 ### Firmware Access Interface
 
 The driver requires access to firmware binary blobs through a generic
-procedure:
+package:
 
 ```ada
-with procedure Read_Resource
-  (Kind   : SDPCM.Resource_Kind;
-   Offset : Natural;
-   Data   : out SDPCM.Byte_Array;
-   Last   : out Natural);
+with package Resources is new SDPCM.Generic_Resources (<>);
 ```
 
-This procedure reads firmware resources of the following kinds:
+The `SDPCM.Generic_Resources` package requires a procedure and a function:
+
+```ada
+generic
+   with procedure Read
+     (Kind   : Resource_Kind;
+      Offset : Natural;
+      Data   : out Byte_Array;
+      Last   : out Natural);
+   --  Read a part of the resource of given Kind starting from Offset
+
+   with function Length (Kind : Resource_Kind) return Natural;
+   --  Length of the resource of given Kind in bytes
+package Generic_Resources is
+end Generic_Resources;
+```
+
+There are resources of the following kinds:
 * **Firmware** - the main firmware binary for the WiFi chip
 * **NVRAM** - NVRAM configuration data
 * **CLM_Blob** - Country Localization Module blob for regulatory compliance
+  (CYW43439 only)
 
 The implementation is responsible for providing access to these firmware
 blobs, which can be stored in flash memory, SD card, or embedded as constants
-in your application.
-The current driver implementation has a limitation that the NVRAM size must
-be 0x300 bytes.
+in your application. The NVRAM length (rounded up to a word) defines the size
+of the NVRAM area in the chip RAM.
 
 #### Helper for Memory-Mapped Firmware
 
 For the common case where all three firmware blobs are stored sequentially
-in memory without gaps, the driver provides a ready-to-use generic procedure:
+in memory without gaps, the driver provides a ready-to-use generic package:
 
 ```ada
 generic
    Address         : System.Address;
    Firmware_Length : Positive;
    NVRAM_Length    : Positive;
-   CLM_Blob_Length : Positive;
-procedure SDPCM.Generic_Mapped_Read_Resource
-  (Kind   : Resource_Kind;
-   Offset : Natural;
-   Data   : out Byte_Array;
-   Last   : out Natural);
+   CLM_Blob_Length : Natural;
+package SDPCM.Generic_Mapped_Resources is
+   procedure Read (...);
+   function Length (Kind : Resource_Kind) return Natural;
+
+   package Resources is new SDPCM.Generic_Resources (Read, Length);
+end SDPCM.Generic_Mapped_Resources;
 ```
 
-This can be instantiated directly to provide the `Read_Resource` procedure
-when your firmware blobs are embedded in a contiguous memory region.
+Pass its `Resources` instance to the driver.
 
 ### Network Configuration Interface
 
@@ -145,9 +158,15 @@ package My_Network is new SDPCM.Generic_Network
    Security => SDPCM.WPA2_AES);
 
 --  Instantiate the driver
+package Firmware is new SDPCM.Generic_Mapped_Resources
+  (Address         => System'To_Address (16#101c0000#),
+   Firmware_Length => 224192,
+   NVRAM_Length    => 16#300#,
+   CLM_Blob_Length => 984);
+
 package Picowi_Interfaces is new Enet_Picowi.Generic_Interface
-  (Read_Resource => Read_Resource,
-   Network       => Network);
+  (Resources => Firmware.Resources,
+   Network   => My_Network);
 ```
 
 ## Examples

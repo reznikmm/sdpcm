@@ -9,7 +9,7 @@ with Enet_Picowi.Generic_Interface;
 with Net.Buffers;
 with Net.DHCP;
 with Net.Interfaces;
-with SDPCM.Generic_Mapped_Read_Resource;
+with SDPCM.Generic_Mapped_Resources;
 
 with WiFi_Credentials;
 
@@ -17,10 +17,10 @@ package Global is
 
    procedure Initialize;
 
-   --  Firmware read APU implementation
+   --  Firmware resources
    -------------------------------------
 
-   procedure Read_Resource is new SDPCM.Generic_Mapped_Read_Resource
+   package Firmware is new SDPCM.Generic_Mapped_Resources
      (Address         => System'To_Address (16#101c0000#),
       Firmware_Length => 224192,
       NVRAM_Length    => 16#300#,
@@ -35,7 +35,7 @@ package Global is
       Security => SDPCM.WPA2_AES);
 
    package Picowi_Interfaces is new Enet_Picowi.Generic_Interface
-     (Read_Resource,
+     (Firmware.Resources,
       Network);
 
    MAC : aliased Picowi_Interfaces.Ifnet;

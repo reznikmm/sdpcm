@@ -40,16 +40,8 @@ generic
    --  SDIO_CK frequency (Hz) after card identification. The polling SDIO
    --  host has no hardware flow control, so keep it moderate.
 
-   with procedure Read_Resource
-     (Kind   : SDPCM.Resource_Kind;
-      Offset : Natural;
-      Data   : out SDPCM.Byte_Array;
-      Last   : out Natural);
-   --  Generic read firmware procedure (Firmware and NVRAM, no CLM blob)
-
-   NVRAM_Size  : Positive;
-   --  Size of NVRAM area in the chip RAM (bytes, multiple of 4). It must be
-   --  not less than the NVRAM resource length.
+   with package Resources is new SDPCM.Generic_Resources (<>);
+   --  Firmware and NVRAM (BCM43362 has no CLM blob)
 
    with package Network is new SDPCM.Generic_Network (<>);
    --  Generic SSID/Password access interface
@@ -140,10 +132,9 @@ private
    package SDPCM_IO is new SDPCM.Generic_IO
      (Bus           => Bus,
       Timeouts      => Timeouts,
-      Read_Resource => Read_Resource,
+      Resources     => Resources,
       Network       => Network,
-      Chip          => SDPCM.BCM43362,
-      NVRAM_Size    => NVRAM_Size);
+      Chip          => SDPCM.BCM43362);
 
    protected type Buffer_Queue
      (Priority : System.Priority := System.Default_Priority)
