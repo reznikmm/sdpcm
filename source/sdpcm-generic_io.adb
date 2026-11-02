@@ -64,6 +64,19 @@ package body SDPCM.Generic_IO is
       Event : SDPCM.Events.Event_Record);
 
    procedure Change_State (State : in out Generic_IO.State);
+   --  Update joining state according to link state and timeouts
+
+   procedure Restart_Join (State : in out Generic_IO.State);
+   --  Execute Join steps again
+
+   Join_Timeout      : constant := 10;
+   --  Seconds to wait for the link after Join steps
+
+   Reconnect_Timeout : constant := 30;
+   --  Seconds to wait for the firmware to reconnect after the link loss
+
+   Retry_Delay       : constant := 10;
+   --  Seconds between failed join and the next attempt
 
    package Executor is
 
@@ -167,7 +180,7 @@ package body SDPCM.Generic_IO is
       SDIO_Function_Interrupt_Mask : constant := 16#34#;
       ARM_Core_Base : constant Interfaces.Unsigned_32 := 16#3000#;
 
-      Start : constant Step_Array :=
+      Boot : constant Step_Array :=
         [(Kind         => Read_Register,
           Address      => Backplane_Register.Chip_Clock_CSR,
           Length       => 1),
@@ -344,10 +357,11 @@ package body SDPCM.Generic_IO is
           Milliseconds => 50),
            (Kind         => IOCTL_Set,
           Variable     => IOCTL.mcast_list,
-          Command      => IOCTL.SET_VAR),
-         --  Restart Join
-         --
-           (Kind         => IOCTL_Set,
+          Command      => IOCTL.SET_VAR)];
+      --  Firmware upload and chip configuration
+
+      Join : constant Step_Array :=
+        [(Kind         => IOCTL_Set,
           Variable     => IOCTL.None,
           Command      => IOCTL.UP),
            (Kind         => IOCTL_Set_32,
@@ -414,6 +428,20 @@ package body SDPCM.Generic_IO is
            (Kind         => IOCTL_Set,
           Variable     => IOCTL.None,
           Command      => IOCTL.SET_SSID)];
+      --  Join the network. Repeated when the join fails.
+
+      function Last return Positive is (Boot'Length + Join'Length);
+      --  Index of the last step of the whole start sequence (Boot & Join).
+      --  Functions, not constants, to keep the unit preelaborable.
+
+      function Start (Index : Positive) return Step is
+        (if Index <= Boot'Length then Boot (Index)
+         else Join (Index - Boot'Length))
+        with Pre => Index <= Last;
+      --  Step of the whole start sequence
+
+      function Join_First return Positive is (Boot'Length + 1);
+      --  Index of the first Join step in the start sequence
    end Executor;
 
    --------------
@@ -809,43 +837,60 @@ package body SDPCM.Generic_IO is
    ------------------
 
    procedure Change_State (State : in out Generic_IO.State) is
+      Connected : constant Boolean := State.Link.Up and State.Link.Auth;
    begin
       case State.Joining.Kind is
          when Crashed | Boot_Up =>
             null;
 
          when Idle =>
+            --  Join steps have been sent, wait for the firmware events
             State.Joining :=
               (Kind    => Joining,
-               Timeout => Timeouts.New_Timeout (10));
+               Timeout => Timeouts.New_Timeout (Join_Timeout));
 
-            State.Link := (Failed => False, Up => False, Auth => False);
-
-            --  Restart_Join (State);
          when Joining =>
-            if State.Link.Failed
+            if Connected then
+               State.Joining := (Kind => Joined);
+            elsif State.Link.Join_Failed
               or else Timeouts.Is_Expired (State.Joining.Timeout)
             then
                State.Joining :=
                  (Kind    => Failed,
-                  Timeout => Timeouts.New_Timeout (10));
-               --  Stop_Join (State);
-            elsif State.Link.Up and State.Link.Auth then
-               State.Joining := (Kind => Joined);
+                  Timeout => Timeouts.New_Timeout (Retry_Delay));
             end if;
+
          when Joined =>
-            if State.Link.Failed then
+            if not Connected then
+               --  The firmware reconnects by itself after deauth or beacon
+               --  loss. Give it time before a new join.
                State.Joining :=
-                 (Kind    => Failed,
-                  Timeout => Timeouts.New_Timeout (10));
-               --  Stop_Join (State);
+                 (Kind    => Joining,
+                  Timeout => Timeouts.New_Timeout (Reconnect_Timeout));
             end if;
+
          when Failed =>
-            if Timeouts.Is_Expired (State.Joining.Timeout) then
-               State.Joining := (Kind => Idle);
+            if Connected then
+               --  The firmware has reconnected by itself
+               State.Joining := (Kind => Joined);
+            elsif Timeouts.Is_Expired (State.Joining.Timeout)
+              and State.Step not in 1 .. Executor.Last
+            then
+               Restart_Join (State);
             end if;
       end case;
    end Change_State;
+
+   ------------------
+   -- Restart_Join --
+   ------------------
+
+   procedure Restart_Join (State : in out Generic_IO.State) is
+   begin
+      State.Link := (others => False);
+      State.Step := Executor.Join_First;
+      State.Offset := 0;
+   end Restart_Join;
 
    ----------------------
    -- Complete_Reading --
@@ -879,15 +924,14 @@ package body SDPCM.Generic_IO is
                function To_Event_Record is new Ada.Unchecked_Conversion
                  (Event_Record_Raw, SDPCM.Events.Event_Record);
 
-               Event : constant SDPCM.Events.Event_Record :=
-                 (if Buffer'Last - Got.Offset + 1 >= Event_Length
-                  then To_Event_Record
-                    (Buffer (Got.Offset .. Got.Offset + Event_Length - 1))
-                  else
-                    (Eventh => (Event_Type => 0, others => <>),
-                     others => <>));
+               function Got_Event return SDPCM.Events.Event_Record is
+                 (To_Event_Record
+                   (Buffer (Got.Offset .. Got.Offset + Event_Length - 1)));
             begin
-               On_Event (State, Event);
+               --  Ignore truncated events
+               if Got.Offset + Event_Length - 1 <= Buffer'Last then
+                  On_Event (State, Got_Event);
+               end if;
             end;
          when Packets.Control =>
             if Got.IOCTL_Header.Command = IOCTL.Command (State.Command) then
@@ -923,21 +967,39 @@ package body SDPCM.Generic_IO is
      (State : in out Generic_IO.State;
       Event : SDPCM.Events.Event_Record)
    is
+      --  Event fields are in the network byte order
+      WLC_E_SET_SSID     : constant := 16#00_00_00_00#;  --  SWAP32 (0)
+      WLC_E_DEAUTH_IND   : constant := 16#06_00_00_00#;  --  SWAP32 (6)
+      WLC_E_DISASSOC_IND : constant := 16#0c_00_00_00#;  --  SWAP32 (12)
       WLC_E_LINK         : constant := 16#10_00_00_00#;  --  SWAP32 (16)
       WLC_E_PSK_SUP      : constant := 16#2e_00_00_00#;  --  SWAP32 (46)
-      WLC_E_DISASSOC_IND : constant := 16#0c_00_00_00#;  --  SWAP32 (12)
+
+      WLC_SUP_KEYED      : constant := 16#06_00_00_00#;  --  SWAP32 (6)
+      WLC_EVENT_MSG_LINK : constant := 16#01_00#;        --  SWAP16 (1)
+
+      Header : SDPCM.Events.EVENT_HDR renames Event.Eventh;
    begin
-      if State.Link.Failed then
-         null;  --  Do notheng if link is down
-      elsif Event.Eventh.Event_Type = WLC_E_LINK
-        and Event.Eventh.Status = 0
-      then
-         State.Link.Up := (Event.Eventh.Flags and 16#01_00#) /= 0;
-      elsif Event.Eventh.Event_Type = WLC_E_PSK_SUP then
-         State.Link.Auth := Event.Eventh.Status = 16#06_00_00_00#;
-      elsif Event.Eventh.Event_Type = WLC_E_DISASSOC_IND then
-         State.Link := (Failed => True);
-      end if;
+      case Header.Event_Type is
+         when WLC_E_SET_SSID =>
+            --  Result of the join. The firmware doesn't retry on failure
+            State.Link.Join_Failed := Header.Status /= 0;
+
+         when WLC_E_LINK =>
+            State.Link.Up := (Header.Flags and WLC_EVENT_MSG_LINK) /= 0;
+
+         when WLC_E_PSK_SUP =>
+            --  Keyed with non-zero reason means deauth, the firmware will
+            --  reconnect and report keyed state again
+            State.Link.Auth :=
+              Header.Status = WLC_SUP_KEYED and Header.Reason = 0;
+
+         when WLC_E_DEAUTH_IND | WLC_E_DISASSOC_IND =>
+            State.Link.Up := False;
+            State.Link.Auth := False;
+
+         when others =>
+            null;
+      end case;
 
       Change_State (State);
    end On_Event;
@@ -1003,7 +1065,7 @@ package body SDPCM.Generic_IO is
       end if;
 
       if not Ok
-        and (State.Step not in Executor.Start'Range or else Need_Reading)
+        and (State.Step not in 1 .. Executor.Last or else Need_Reading)
       then
          --  No response found, (no active step or the step needs reading)
          declare
@@ -1017,7 +1079,7 @@ package body SDPCM.Generic_IO is
                Action := (Kind => Complete_IO);
             elsif Length > 0 then
                raise Program_Error;  --  Buffer too small
-            elsif State.Step not in Executor.Start'Range
+            elsif State.Step not in 1 .. Executor.Last
               and then Bus.Is_Ready
             then
                Change_State (State);
@@ -1043,7 +1105,7 @@ package body SDPCM.Generic_IO is
          Custom_Value =>
            Packets.Make_Tag (Interfaces.Unsigned_16 (NVRAM_Size / 4)));
 
-      if State.Step not in Executor.Start'Range then
+      if State.Step not in 1 .. Executor.Last then
          State.Joining := (Kind => Idle);
          Action := (Kind => Continue);
       else
