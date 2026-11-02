@@ -20,6 +20,8 @@ with Picowi.PIO_SPI;
 with SDPCM.Generic_Mapped_Read_Resource;
 with SDPCM.Generic_IO;
 
+with WiFi_Credentials;
+
 procedure Blink is
 
    --  Bus interface implementaion
@@ -63,12 +65,11 @@ procedure Blink is
 
    --  Network interface implementation
    ------------------------------------
-   function SSID return String is ("guest");
-
-   function Password return String is ("guest123");
 
    package Network is new SDPCM.Generic_Network
-     (SSID, Password, Security => SDPCM.WPA2_AES);
+     (WiFi_Credentials.SSID,
+      WiFi_Credentials.Password,
+      Security => SDPCM.WPA2_AES);
 
    package SDPCM_IO is new SDPCM.Generic_IO
      (Bus           => SPI_Bus,

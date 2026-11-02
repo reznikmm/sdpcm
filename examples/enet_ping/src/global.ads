@@ -11,6 +11,8 @@ with Net.DHCP;
 with Net.Interfaces;
 with SDPCM.Generic_Mapped_Read_Resource;
 
+with WiFi_Credentials;
+
 package Global is
 
    procedure Initialize;
@@ -26,12 +28,11 @@ package Global is
 
    --  Network interface implementation
    ------------------------------------
-   function SSID return String is ("guest");
-
-   function Password return String is ("guest123");
 
    package Network is new SDPCM.Generic_Network
-     (SSID, Password, Security => SDPCM.WPA2_AES);
+     (WiFi_Credentials.SSID,
+      WiFi_Credentials.Password,
+      Security => SDPCM.WPA2_AES);
 
    package Picowi_Interfaces is new Enet_Picowi.Generic_Interface
      (Read_Resource,

@@ -152,6 +152,13 @@ package Picowi_Interfaces is new Enet_Picowi.Generic_Interface
 
 ## Examples
 
+The examples take WiFi network name and password from `WIFI_SSID` and
+`WIFI_PASSWORD` environment variables (`guest`/`guest123` by default):
+
+    WIFI_SSID=MyNet WIFI_PASSWORD=secret alr -C examples/enet_ping build -- -s
+
+The `-s` switch forces recompilation when the credentials change.
+
 The repository includes two example applications demonstrating different
 usage scenarios:
 

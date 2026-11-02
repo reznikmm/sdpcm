@@ -23,5 +23,7 @@ jobs:
         alr -C enet_picowi build
     - name: Build examples
       run: |
-        alr -C examples/blink     build
-        alr -C examples/enet_ping build
+        alr -C examples/blink        build
+        alr -C examples/enet_ping    build
+        alr -C examples/emw3165_ping build
+

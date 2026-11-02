@@ -19,8 +19,20 @@ project EMW3165_Ping is
    for Exec_Dir use "bin";
    for Main use ("emw3165_ping.adb");
 
+   WiFi_SSID     := external ("WIFI_SSID", "guest");
+   WiFi_Password := external ("WIFI_PASSWORD", "guest123");
+   --  WiFi network credentials, see src/wifi_credentials.ads
+
    package Compiler is
-      for Default_Switches ("Ada") use Emw3165_Ping_Config.Ada_Compiler_Switches;
+      for Default_Switches ("Ada") use
+        Emw3165_Ping_Config.Ada_Compiler_Switches;
+
+      for Switches ("wifi_credentials.adb") use
+        Emw3165_Ping_Config.Ada_Compiler_Switches &
+        ("-gnateDWIFI_SSID=""" & WiFi_SSID & """",
+         "-gnateDWIFI_PASSWORD=""" & WiFi_Password & """",
+         "-gno-record-gcc-switches");
+      --  Don't keep the password in DW_AT_producer of the debug info
    end Compiler;
 
    package Binder is
