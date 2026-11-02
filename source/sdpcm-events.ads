@@ -20,6 +20,7 @@ package SDPCM.Events is
    AUTH          : constant Event := 3;
    PSK_SUP       : constant Event := 46;
    EAPOL_MSG     : constant Event := 25;
+   DEAUTH_IND    : constant Event := 6;
    DISASSOC_IND  : constant Event := 12;
 
    Last_Event : constant Event := 208;
@@ -40,6 +41,7 @@ package SDPCM.Events is
       AUTH,
       PSK_SUP,
       EAPOL_MSG,
+      DEAUTH_IND,
       DISASSOC_IND);
 
    function To_Mask (List : Event_Array) return Event_Mask;

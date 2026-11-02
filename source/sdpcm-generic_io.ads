@@ -187,14 +187,15 @@ private
       end case;
    end record;
 
-   type Link_State (Failed : Boolean := True) is record
-      case Failed is
-         when False =>
-            Up   : Boolean;
-            Auth : Boolean;
-         when True =>
-            null;
-      end case;
+   type Link_State is record
+      Up          : Boolean := False;
+      --  The firmware reports link up (WLC_E_LINK)
+
+      Auth        : Boolean := False;
+      --  The supplicant has installed keys (WLC_E_PSK_SUP)
+
+      Join_Failed : Boolean := False;
+      --  The last join has failed (WLC_E_SET_SSID with non-zero status)
    end record;
 
    type State is limited record
