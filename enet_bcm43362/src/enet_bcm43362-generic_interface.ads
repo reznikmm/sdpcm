@@ -4,9 +4,11 @@
 ----------------------------------------------------------------
 
 --  ENet network interface on top of SDPCM driver for BCM43362 connected to
---  the STM32F4 SDIO host controller (polling variant).
+--  the STM32F4 SDIO host controller. Register access uses the polling SDIO
+--  variant, WLAN frames are transferred by DMA (DMA2 Stream 3).
 --
---  The package owns the SDIO peripheral, so instantiate it only once.
+--  The package owns the SDIO peripheral and DMA2 Stream 3, so instantiate
+--  it only once.
 --  Call Create, then start a Net.Generic_Receiver task for the interface.
 --  The receiver task runs the driver state machine inside Receive.
 
@@ -36,9 +38,13 @@ generic
    Reset_Pin   : STM32.Pin := (STM32.PB, 14);
    --  WL_REG_ON/reset pin of the WiFi chip
 
+   DMA_Priority : System.Interrupt_Priority := System.Interrupt_Priority'First;
+   --  Priority of SDIO and DMA interrupt handlers
+
    Bus_Speed   : Positive := 400_000;
-   --  SDIO_CK frequency (Hz) after card identification. The polling SDIO
-   --  host has no hardware flow control, so keep it moderate.
+   --  SDIO_CK frequency (Hz) after card identification. Register access and
+   --  firmware upload use polling without hardware flow control, so keep it
+   --  moderate.
 
    with package Resources is new SDPCM.Generic_Resources (<>);
    --  Firmware and NVRAM (BCM43362 has no CLM blob)
@@ -96,10 +102,20 @@ private
       Success    : out Boolean);
    --  Send CMD53 (IO_RW_EXTENDED) with a data transfer
 
+   procedure Start_Read_Write_Extended
+     (Argument   : Interfaces.Unsigned_32;
+      Block_Size : Positive;
+      Length     : Positive;
+      Data       : System.Address);
+   --  Start CMD53 (IO_RW_EXTENDED) with a DMA transfer
+
    procedure Sleep (Milliseconds : Positive);
 
    package SDIO_Bus is new SDPCM.Generic_SDIO
-     (Read_Write_Direct, Read_Write_Extended, Sleep);
+     (IO_Read_Write_Direct         => Read_Write_Direct,
+      IO_Read_Write_Extended       => Read_Write_Extended,
+      Start_IO_Read_Write_Extended => Start_Read_Write_Extended,
+      Sleep                        => Sleep);
 
    package Bus is new SDPCM.Generic_Bus
      (Read_Backplane_Register  => SDIO_Bus.Read_Backplane_Register,

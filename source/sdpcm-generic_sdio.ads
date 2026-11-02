@@ -14,8 +14,12 @@
 --  CMD7) before calling Initialize. After Switch_To_Four_Bit_Bus the host
 --  should switch its own bus width too.
 --
---  All operations are synchronous. Start_Writing_WLAN/Start_Reading_WLAN
---  of SDPCM.Generic_Bus are complete when the procedures return.
+--  Register access, firmware upload and frame length polling are
+--  synchronous (IO_Read_Write_Direct, IO_Read_Write_Extended). Frame
+--  transfers (Write_WLAN, Read_WLAN) start an asynchronous CMD53 with
+--  Start_IO_Read_Write_Extended, for instance a DMA transfer. When
+--  Is_Transfer_Pending is True, the host should wait for the end of the
+--  transfer and call Complete_Transfer before any other call.
 
 with Interfaces;
 with System;
@@ -39,6 +43,16 @@ generic
    --  card). Block_Size is a power of two in 4 .. 64 and Length is a
    --  multiple of Block_Size. Data is word aligned. In byte mode (bit 27 is
    --  0) Block_Size = Length.
+
+   with procedure Start_IO_Read_Write_Extended
+     (Argument   : Interfaces.Unsigned_32;
+      Block_Size : Positive;
+      Length     : Positive;
+      Data       : System.Address);
+   --  Start CMD53 like IO_Read_Write_Extended, but don't wait for the end
+   --  of the transfer. Block_Size is 64 or a power of two in 16 .. 32 in
+   --  byte mode. Data is word aligned. Call Complete_Transfer when the
+   --  transfer is finished.
 
    with procedure Sleep (Milliseconds : Positive);
    --  Wait for given time. Used only by Initialize.
@@ -92,14 +106,29 @@ package SDPCM.Generic_SDIO is
    --  Write Value to the backplane window at Address
 
    procedure Write_WLAN (Value : Buffer_Byte_Array);
-   --  Send a frame to function 2. The transfer is padded up to the block
-   --  size (or to a power of two for short frames), so up to 63 bytes after
-   --  Value'Last are read and sent too. The device ignores them, because
-   --  the frame length is in the SDPCM header.
+   --  Start sending a frame to function 2. The transfer is padded up to the
+   --  block size (or to a power of two for short frames), so up to 63
+   --  bytes after Value'Last are sent too. The device ignores them, because
+   --  the frame length is in the SDPCM header. Value should not be changed
+   --  until Complete_Transfer.
 
    procedure Read_WLAN (Value : out Buffer_Byte_Array);
-   --  Read a frame from function 2. Value'Length should be the length
-   --  returned by Available_Packet_Length.
+   --  Start reading a frame from function 2. Value'Length should be the
+   --  length returned by Available_Packet_Length. Whole blocks are read
+   --  asynchronously directly into Value, the rest (less than a block) is
+   --  read by Complete_Transfer. A short frame is read synchronously and
+   --  Is_Transfer_Pending is False then.
+
+   function Is_Transfer_Pending return Boolean;
+   --  An asynchronous transfer started by Write_WLAN or Read_WLAN should be
+   --  completed by Complete_Transfer
+
+   procedure Complete_Transfer
+     (Response : Interfaces.Unsigned_32;
+      Success  : Boolean)
+     with Pre => Is_Transfer_Pending, Post => not Is_Transfer_Pending;
+   --  Finish the asynchronous transfer. Response is R5 response of CMD53,
+   --  Success is False if the transfer failed.
 
    function Available_Packet_Length return Interfaces.Unsigned_32;
    --  Read the 4-byte frame tag (length and its complement) from function 2

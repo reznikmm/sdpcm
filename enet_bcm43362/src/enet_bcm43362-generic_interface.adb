@@ -3,12 +3,16 @@
 --  SPDX-License-Identifier: MIT
 ----------------------------------------------------------------
 
+with Ada.Synchronous_Task_Control;
+
+with A0B.Callbacks.Generic_Parameterless;
+
 with Net.Headers;
 with Net.Protos.IPv4;
 
 with STM32.GPIO;
 with STM32.Polling.SDIO;
-with STM32.SDIO;
+with STM32.SDIO.DMA_SDIO;
 
 package body Enet_BCM43362.Generic_Interface is
 
@@ -16,6 +20,23 @@ package body Enet_BCM43362.Generic_Interface is
    use type STM32.SDIO.Error_Kind;
 
    package SDIO renames STM32.Polling.SDIO;
+   --  Synchronous commands: CMD52 and short CMD53
+
+   package DMA is new STM32.SDIO.DMA_SDIO (DMA_Priority);
+   --  Asynchronous CMD53 for WLAN frames. Never used together with SDIO:
+   --  Generic_IO doesn't call the bus until the transfer is completed.
+
+   procedure On_Transfer_Done;
+   --  DMA transfer completion callback
+
+   package Transfer_Done_Callbacks is
+     new A0B.Callbacks.Generic_Parameterless (On_Transfer_Done);
+
+   Transfer_Done : Ada.Synchronous_Task_Control.Suspension_Object;
+   --  Set by On_Transfer_Done, the receiver task waits on it
+
+   procedure Wait_Transfer;
+   --  Wait for the end of asynchronous transfer, if any, and complete it
 
    CCCR_IO_Abort       : constant := 16#06#;
    IO_Abort_Reset      : constant := 16#08#;  --  RES bit
@@ -198,6 +219,15 @@ package body Enet_BCM43362.Generic_Interface is
       end if;
    end Probe_SDIO_Card;
 
+   ----------------------
+   -- On_Transfer_Done --
+   ----------------------
+
+   procedure On_Transfer_Done is
+   begin
+      Ada.Synchronous_Task_Control.Set_True (Transfer_Done);
+   end On_Transfer_Done;
+
    -----------------------
    -- Read_Write_Direct --
    -----------------------
@@ -209,6 +239,8 @@ package body Enet_BCM43362.Generic_Interface is
    is
       Error : STM32.SDIO.Error_Kind;
    begin
+      pragma Assert (not DMA.Is_Busy);
+
       SDIO.Send_Command
         ((Command  => 52,
           Argument => Argument,
@@ -233,6 +265,8 @@ package body Enet_BCM43362.Generic_Interface is
    is
       Error : STM32.SDIO.Error_Kind;
    begin
+      pragma Assert (not DMA.Is_Busy);
+
       SDIO.Send_Command
         (Item   =>
            (Command  => 53,
@@ -281,6 +315,7 @@ package body Enet_BCM43362.Generic_Interface is
                    with Import, Address => Packet.Get_Data_Address;
             begin
                SDPCM_IO.Poll (Self.State, Raw, Action => Action);
+               Wait_Transfer;
             end;
          else
             Set_Check_Sum (Output);
@@ -296,6 +331,7 @@ package body Enet_BCM43362.Generic_Interface is
                   Raw,
                   Send   => (From => 1, To => Size),
                   Action => Action);
+               Wait_Transfer;
             end;
          end if;
 
@@ -315,8 +351,8 @@ package body Enet_BCM43362.Generic_Interface is
                Delay_Milliseconds (Action.Milliseconds);
 
             when SDPCM_IO.Complete_IO =>
-               --  The SDIO bus layer is synchronous, the transfer is
-               --  complete already. Release the sent packet, if any.
+               --  Wait_Transfer has completed the transfer already.
+               --  Release the sent packet, if any.
                Net.Buffers.Release (Output);
 
             when SDPCM_IO.Process_Packet =>
@@ -420,6 +456,34 @@ package body Enet_BCM43362.Generic_Interface is
       end if;
    end Set_Check_Sum;
 
+   -------------------------------
+   -- Start_Read_Write_Extended --
+   -------------------------------
+
+   procedure Start_Read_Write_Extended
+     (Argument   : Interfaces.Unsigned_32;
+      Block_Size : Positive;
+      Length     : Positive;
+      Data       : System.Address) is
+   begin
+      Ada.Synchronous_Task_Control.Set_False (Transfer_Done);
+
+      DMA.Start_Command
+        (Item   =>
+           (Command  => 53,
+            Argument => Argument,
+            Response => STM32.SDIO.Short_Response),
+         Data   =>
+           (Direction  =>
+                (if (Argument and 2 ** 31) /= 0 then STM32.SDIO.Host_To_Card
+                 else STM32.SDIO.Card_To_Host),
+            Block_Size => STM32.SDIO.Block_Length (Block_Size),
+            Length     => Length,
+            Timeout    => Data_Timeout),
+         Buffer => Data,
+         Done   => Transfer_Done_Callbacks.Create_Callback);
+   end Start_Read_Write_Extended;
+
    -----------
    -- Sleep --
    -----------
@@ -428,5 +492,17 @@ package body Enet_BCM43362.Generic_Interface is
    begin
       Delay_Milliseconds (Milliseconds);
    end Sleep;
+
+   -------------------
+   -- Wait_Transfer --
+   -------------------
+
+   procedure Wait_Transfer is
+   begin
+      if SDIO_Bus.Is_Transfer_Pending then
+         Ada.Synchronous_Task_Control.Suspend_Until_True (Transfer_Done);
+         SDIO_Bus.Complete_Transfer (DMA.Short_Response, not DMA.Has_Error);
+      end if;
+   end Wait_Transfer;
 
 end Enet_BCM43362.Generic_Interface;

@@ -19,6 +19,7 @@ development.contracts = "Yes"
 sdpcm = "~0.1.0-dev"
 enet = "^1.1"
 aa_stm32_drivers = "~0.1.0"
+a0b_callbacks = "~0.2.0"
 light_tasking_stm32f4xx = "*"
 
 [[pins]]
