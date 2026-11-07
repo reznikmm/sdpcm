@@ -119,6 +119,7 @@ package body Enet_BCM43362.Generic_Interface is
    procedure Create (Self : in out Ifnet'Class; Success : out Boolean) is
       pragma Unreferenced (Self);
       Chip_Id : Interfaces.Unsigned_32;
+      Sleep   : Natural := 0;
    begin
       Reset_Chip;
 
@@ -132,7 +133,11 @@ package body Enet_BCM43362.Generic_Interface is
       Probe_SDIO_Card (Success);
 
       if Success then
-         SDIO_Bus.Initialize (Success);
+         loop
+            SDIO_Bus.Initialize (Success, Sleep);
+            exit when Sleep = 0;
+            Delay_Milliseconds (Sleep);
+         end loop;
       end if;
 
       if Success then
@@ -495,15 +500,6 @@ package body Enet_BCM43362.Generic_Interface is
          Buffer => Data,
          Done   => Transfer_Done_Callbacks.Create_Callback);
    end Start_Read_Write_Extended;
-
-   -----------
-   -- Sleep --
-   -----------
-
-   procedure Sleep (Milliseconds : Positive) is
-   begin
-      Delay_Milliseconds (Milliseconds);
-   end Sleep;
 
    -------------------
    -- Wait_Transfer --

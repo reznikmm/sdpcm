@@ -53,6 +53,17 @@ package body SDPCM.Generic_SDIO is
    --  The smallest byte mode transfer for asynchronous CMD53 (four words,
    --  a DMA burst)
 
+   type Initialization_Step is
+     (Enable_Backplane,
+      Set_Block_Size,
+      Wait_Backplane_Ready,
+      Wait_ALP_Clock);
+   --  Steps of Initialize which could wait
+
+   Init_Step    : Initialization_Step := Enable_Backplane;
+   Init_Attempt : Natural := 0;
+   --  The current step of Initialize and its attempt number
+
    Failed      : Boolean := False;
    Tag_Pending : Boolean := False;
    Tag         : Interfaces.Unsigned_32 := 0;
@@ -149,14 +160,6 @@ package body SDPCM.Generic_SDIO is
    --  Transfer exactly Length bytes (less than a block) synchronously:
    --  power of two byte mode chunks, then single bytes (CMD52 for function
    --  1, a padded word for function 2).
-
-   procedure Wait_For
-     (Number   : Function_Number;
-      Address  : Interfaces.Unsigned_32;
-      Mask     : Interfaces.Unsigned_8;
-      Attempts : Positive;
-      Success  : out Boolean);
-   --  Read the register every millisecond until (Value and Mask) /= 0
 
    procedure Abort_Read;
    --  Abort function 2 read and drop the rest of the frame
@@ -306,96 +309,178 @@ package body SDPCM.Generic_SDIO is
    -- Initialize --
    ----------------
 
-   procedure Initialize (Success : out Boolean) is
+   procedure Initialize
+     (Success : out Boolean;
+      Sleep   : in out Natural)
+   is
+      procedure Go_To (Step : Initialization_Step);
+      --  Switch to the next Step
+
+      procedure Retry (Limit : Positive);
+      --  Ask to sleep 1 ms and repeat the current step, or fail if Limit
+      --  attempts have been done already
+
+      procedure Finish (Result : Boolean);
+      --  Report Result and reset the state for the next Initialize
+
+      -----------
+      -- Go_To --
+      -----------
+
+      procedure Go_To (Step : Initialization_Step) is
+      begin
+         Init_Step := Step;
+         Init_Attempt := 0;
+      end Go_To;
+
+      ------------
+      -- Finish --
+      ------------
+
+      procedure Finish (Result : Boolean) is
+      begin
+         Success := Result;
+         Sleep := 0;
+         Go_To (Enable_Backplane);
+      end Finish;
+
+      -----------
+      -- Retry --
+      -----------
+
+      procedure Retry (Limit : Positive) is
+      begin
+         if Init_Attempt < Limit then
+            Init_Attempt := Init_Attempt + 1;
+            Success := False;
+            Sleep := 1;
+         else
+            Finish (False);
+         end if;
+      end Retry;
+
       Value : Interfaces.Unsigned_8 := 0;
    begin
-      --  Enable function 1 (backplane)
-      for Attempt in 1 .. 500 loop
-         Write_Byte (0, CCCR.IO_Enable, Function_1_Bit, Success);
-         Read_Byte (0, CCCR.IO_Enable, Value, Success);
-         exit when Success and Value = Function_1_Bit;
-         Sleep (1);
+      if Sleep = 0 then
+         Init_Step := Enable_Backplane;
+      end if;
+
+      loop
+         case Init_Step is
+            when Enable_Backplane =>
+               --  Enable function 1 (backplane)
+               Write_Byte (0, CCCR.IO_Enable, Function_1_Bit, Success);
+               Read_Byte (0, CCCR.IO_Enable, Value, Success);
+
+               if Success and Value = Function_1_Bit then
+                  Go_To (Set_Block_Size);
+               else
+                  Retry (500);
+                  exit;
+               end if;
+
+            when Set_Block_Size =>
+               --  Set the block size, wait till the backplane is ready
+               Write_Byte (0, CCCR.Block_Size_Low, Block_Size, Success);
+               Read_Byte (0, CCCR.Block_Size_Low, Value, Success);
+
+               if not Success or Value /= Block_Size then
+                  Retry (500);
+                  exit;
+               end if;
+
+               Write_Byte (0, CCCR.Function_1_Block_Low, Block_Size, Success);
+
+               if Success then
+                  Write_Byte
+                    (0, CCCR.Function_2_Block_Low, Block_Size, Success);
+               end if;
+
+               if Success then
+                  Write_Byte (0, CCCR.Function_2_Block_High, 0, Success);
+               end if;
+
+               if Success then
+                  Write_Byte
+                    (0,
+                     CCCR.Interrupt_Enable,
+                     Master_Interrupt_Enable + Function_1_Bit
+                       + Function_2_Bit,
+                     Success);
+               end if;
+
+               if Success then
+                  Go_To (Wait_Backplane_Ready);
+               else
+                  Finish (False);
+                  exit;
+               end if;
+
+            when Wait_Backplane_Ready =>
+               Read_Byte (0, CCCR.IO_Ready, Value, Success);
+
+               if not Success then
+                  Finish (False);
+                  exit;
+               elsif (Value and Function_1_Bit) = 0 then
+                  Retry (500);
+                  exit;
+               end if;
+
+               --  Request ALP clock
+               Write_Byte
+                 (1,
+                  Function_1_Register.Chip_Clock_CSR,
+                  Force_Hardware_Clock_Request_Off + ALP_Available_Request
+                    + Force_ALP,
+                  Success);
+
+               if Success then
+                  Go_To (Wait_ALP_Clock);
+               else
+                  Finish (False);
+                  exit;
+               end if;
+
+            when Wait_ALP_Clock =>
+               Read_Byte
+                 (1, Function_1_Register.Chip_Clock_CSR, Value, Success);
+
+               if not Success then
+                  Finish (False);
+                  exit;
+               elsif (Value and ALP_Available) = 0 then
+                  Retry (100);
+                  exit;
+               end if;
+
+               Write_Byte (1, Function_1_Register.Chip_Clock_CSR, 0, Success);
+
+               --  Disable the extra SDIO pull-ups
+               if Success then
+                  Write_Byte (1, Function_1_Register.Pull_Up, 0, Success);
+               end if;
+
+               --  Enable functions 1 and 2
+               if Success then
+                  Write_Byte
+                    (0, CCCR.IO_Enable, Function_1_Bit + Function_2_Bit,
+                     Success);
+               end if;
+
+               --  Enable function 2 interrupt only
+               if Success then
+                  Write_Byte
+                    (0,
+                     CCCR.Interrupt_Enable,
+                     Master_Interrupt_Enable + Function_2_Bit,
+                     Success);
+               end if;
+
+               Finish (Success);
+               exit;
+         end case;
       end loop;
-
-      if not Success or Value /= Function_1_Bit then
-         Success := False;
-         return;
-      end if;
-
-      --  Set the block size, wait till the backplane is ready
-      for Attempt in 1 .. 500 loop
-         Write_Byte (0, CCCR.Block_Size_Low, Block_Size, Success);
-         Read_Byte (0, CCCR.Block_Size_Low, Value, Success);
-         exit when Success and Value = Block_Size;
-         Sleep (1);
-      end loop;
-
-      if not Success or Value /= Block_Size then
-         Success := False;
-         return;
-      end if;
-
-      Write_Byte (0, CCCR.Function_1_Block_Low, Block_Size, Success);
-
-      if Success then
-         Write_Byte (0, CCCR.Function_2_Block_Low, Block_Size, Success);
-      end if;
-
-      if Success then
-         Write_Byte (0, CCCR.Function_2_Block_High, 0, Success);
-      end if;
-
-      if Success then
-         Write_Byte
-           (0,
-            CCCR.Interrupt_Enable,
-            Master_Interrupt_Enable + Function_1_Bit + Function_2_Bit,
-            Success);
-      end if;
-
-      if Success then
-         Wait_For (0, CCCR.IO_Ready, Function_1_Bit, 500, Success);
-      end if;
-
-      --  Request ALP clock and wait for it
-      if Success then
-         Write_Byte
-           (1,
-            Function_1_Register.Chip_Clock_CSR,
-            Force_Hardware_Clock_Request_Off + ALP_Available_Request
-              + Force_ALP,
-            Success);
-      end if;
-
-      if Success then
-         Wait_For
-           (1, Function_1_Register.Chip_Clock_CSR, ALP_Available, 100,
-            Success);
-      end if;
-
-      if Success then
-         Write_Byte (1, Function_1_Register.Chip_Clock_CSR, 0, Success);
-      end if;
-
-      --  Disable the extra SDIO pull-ups
-      if Success then
-         Write_Byte (1, Function_1_Register.Pull_Up, 0, Success);
-      end if;
-
-      --  Enable functions 1 and 2
-      if Success then
-         Write_Byte
-           (0, CCCR.IO_Enable, Function_1_Bit + Function_2_Bit, Success);
-      end if;
-
-      --  Enable function 2 interrupt only
-      if Success then
-         Write_Byte
-           (0,
-            CCCR.Interrupt_Enable,
-            Master_Interrupt_Enable + Function_2_Bit,
-            Success);
-      end if;
    end Initialize;
 
    --------------
@@ -678,28 +763,6 @@ package body SDPCM.Generic_SDIO is
          end;
       end if;
    end Transfer_Exactly;
-
-   --------------
-   -- Wait_For --
-   --------------
-
-   procedure Wait_For
-     (Number   : Function_Number;
-      Address  : Interfaces.Unsigned_32;
-      Mask     : Interfaces.Unsigned_8;
-      Attempts : Positive;
-      Success  : out Boolean)
-   is
-      Value : Interfaces.Unsigned_8 := 0;
-   begin
-      for Attempt in 1 .. Attempts loop
-         Read_Byte (Number, Address, Value, Success);
-         exit when not Success or (Value and Mask) /= 0;
-         Sleep (1);
-      end loop;
-
-      Success := Success and (Value and Mask) /= 0;
-   end Wait_For;
 
    ---------------------
    -- Write_Backplane --

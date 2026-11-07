@@ -56,19 +56,28 @@ generic
    --  byte mode. Data is word aligned. Call Complete_Transfer when the
    --  transfer is finished.
 
-   with procedure Sleep (Milliseconds : Positive);
-   --  Wait for given time. Used only by Initialize.
-
 package SDPCM.Generic_SDIO is
    pragma Preelaborate;
 
    Block_Size : constant := 64;
    --  Block size for functions 0, 1 and 2
 
-   procedure Initialize (Success : out Boolean);
+   procedure Initialize
+     (Success : out Boolean;
+      Sleep   : in out Natural);
    --  Bring the backplane up: enable function 1, set block sizes, enable
    --  interrupts, wait for the ALP clock, disable extra pull-ups and enable
    --  function 2. Call it after the card has been selected with CMD7.
+   --
+   --  The procedure does a step of the initialization and doesn't wait. If
+   --  Sleep > 0, then wait Sleep milliseconds and call it again. When Sleep
+   --  is 0, the initialization is finished and Success reports the result:
+   --
+   --     loop
+   --        SDIO_Bus.Initialize (Success, Sleep);
+   --        exit when Sleep = 0;
+   --        delay Duration (Sleep) / 1000.0;
+   --     end loop;
 
    procedure Switch_To_Four_Bit_Bus (Success : out Boolean);
    --  Configure the card for 4-bit data bus. The host should change its bus

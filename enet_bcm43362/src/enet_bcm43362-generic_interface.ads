@@ -114,13 +114,10 @@ private
       Data       : System.Address);
    --  Start CMD53 (IO_RW_EXTENDED) with a DMA transfer
 
-   procedure Sleep (Milliseconds : Positive);
-
    package SDIO_Bus is new SDPCM.Generic_SDIO
      (IO_Read_Write_Direct         => Read_Write_Direct,
       IO_Read_Write_Extended       => Read_Write_Extended,
-      Start_IO_Read_Write_Extended => Start_Read_Write_Extended,
-      Sleep                        => Sleep);
+      Start_IO_Read_Write_Extended => Start_Read_Write_Extended);
 
    package Bus is new SDPCM.Generic_Bus
      (Read_Backplane_Register  => SDIO_Bus.Read_Backplane_Register,
