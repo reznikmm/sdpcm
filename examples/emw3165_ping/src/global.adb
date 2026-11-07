@@ -14,7 +14,7 @@ with Console;
 
 package body Global is
 
-   Buffer_Memory : array (1 .. 16 * 1024) of Net.Uint8
+   Buffer_Memory : array (1 .. 32 * 1024) of Net.Uint8
      with Alignment => 4;
 
    package LAN_Receiver is new Net.Generic_Receiver

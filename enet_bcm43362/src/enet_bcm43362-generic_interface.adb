@@ -90,6 +90,7 @@ package body Enet_BCM43362.Generic_Interface is
       begin
          if not Net.Buffers.Is_Empty (List) then
             Net.Buffers.Peek (List, Packet);
+            Count := Count - 1;
          end if;
       end Get;
 
@@ -97,9 +98,16 @@ package body Enet_BCM43362.Generic_Interface is
       -- Put --
       ---------
 
-      procedure Put (Packet : in out Net.Buffers.Buffer_Type) is
+      procedure Put
+        (Packet : in out Net.Buffers.Buffer_Type;
+         Done   : out Boolean) is
       begin
-         Net.Buffers.Insert (List, Packet);
+         Done := Count < Send_Queue_Length;
+
+         if Done then
+            Net.Buffers.Insert (List, Packet);
+            Count := Count + 1;
+         end if;
       end Put;
 
    end Buffer_Queue;
@@ -404,9 +412,16 @@ package body Enet_BCM43362.Generic_Interface is
 
    overriding procedure Send
      (Self   : in out Ifnet;
-      Packet : in out Net.Buffers.Buffer_Type) is
+      Packet : in out Net.Buffers.Buffer_Type)
+   is
+      Done : Boolean;
    begin
-      Self.Send_Queue.Put (Packet);
+      Self.Send_Queue.Put (Packet, Done);
+
+      if not Done then
+         --  The queue is full, drop the packet like a NIC with full TX ring
+         Net.Buffers.Release (Packet);
+      end if;
    end Send;
 
    -------------------

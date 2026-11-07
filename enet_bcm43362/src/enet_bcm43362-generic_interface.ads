@@ -52,6 +52,11 @@ generic
    with package Network is new SDPCM.Generic_Network (<>);
    --  Generic SSID/Password access interface
 
+   Send_Queue_Length : Positive := 4;
+   --  Maximum number of packets waiting for sending. Send drops a packet
+   --  when the queue is full, so the network stack never runs out of
+   --  buffers for receiving.
+
 package Enet_BCM43362.Generic_Interface is
 
    type Ifnet (Priority : System.Priority := System.Default_Priority) is
@@ -155,11 +160,18 @@ private
    protected type Buffer_Queue
      (Priority : System.Priority := System.Default_Priority)
    is
-      procedure Put (Packet : in out Net.Buffers.Buffer_Type);
+      procedure Put
+        (Packet : in out Net.Buffers.Buffer_Type;
+         Done   : out Boolean);
+      --  Append Packet to the queue unless the queue is full
+
       procedure Get (Packet : in out Net.Buffers.Buffer_Type);
+      --  Take the first packet, if any
    private
       pragma Priority (Priority);
-      List : Net.Buffers.Buffer_List;
+
+      List  : Net.Buffers.Buffer_List;
+      Count : Natural := 0;
    end Buffer_Queue;
 
    type Ifnet (Priority : System.Priority := System.Default_Priority) is
