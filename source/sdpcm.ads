@@ -151,23 +151,29 @@ package SDPCM is
 
       Ready_Timeout : Positive;
       --  Time (milliseconds) to wait for the firmware to become ready
+
+      Max_Credit_Diff : Interfaces.Unsigned_8;
+      --  Maximum valid increment of the SDPCM bus data credit. A bigger
+      --  increment is considered as a corrupted header and ignored.
    end record;
    --  Chip specific parameters of the start sequence
 
    CYW43439 : constant Chip_Profile :=
-     (RAM_Size      => 16#8_0000#,
-      Has_CLM       => True,
-      Has_KSO       => True,
-      Has_SDIO_Core => False,
-      Ready_Timeout => 100);
+     (RAM_Size        => 16#8_0000#,
+      Has_CLM         => True,
+      Has_KSO         => True,
+      Has_SDIO_Core   => False,
+      Ready_Timeout   => 100,
+      Max_Credit_Diff => 20);
    --  Raspberry Pi Pico W (gSPI bus)
 
    BCM43362 : constant Chip_Profile :=
-     (RAM_Size      => 16#3_C000#,
-      Has_CLM       => False,
-      Has_KSO       => False,
-      Has_SDIO_Core => True,
-      Ready_Timeout => 1000);
+     (RAM_Size        => 16#3_C000#,
+      Has_CLM         => False,
+      Has_KSO         => False,
+      Has_SDIO_Core   => True,
+      Ready_Timeout   => 1000,
+      Max_Credit_Diff => 7);
    --  EMW3165 and other similar modules (SDIO bus)
 
    generic

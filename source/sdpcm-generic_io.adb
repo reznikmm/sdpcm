@@ -11,6 +11,7 @@ with SDPCM.IOCTL;
 with SDPCM.Packets;
 
 package body SDPCM.Generic_IO is
+   use type Interfaces.Unsigned_8;
    use type Interfaces.Unsigned_16;
    use type Interfaces.Unsigned_32;
 
@@ -62,6 +63,16 @@ package body SDPCM.Generic_IO is
    procedure On_Event
      (State : in out Generic_IO.State;
       Event : SDPCM.Events.Event_Record);
+
+   function Has_Credit (State : Generic_IO.State) return Boolean is
+     (IOCTL.Has_Credit (State.Credit));
+   --  The device accepts one more frame
+
+   procedure Update_Credit
+     (State  : in out Generic_IO.State;
+      Buffer : Buffer_Byte_Array);
+   --  Take bus data credit and flow control from the SDPCM header of a
+   --  received frame
 
    procedure Change_State (State : in out Generic_IO.State);
    --  Update joining state according to link state and timeouts
@@ -910,6 +921,8 @@ package body SDPCM.Generic_IO is
       From := 0;
       State.Reading := 0;
 
+      Update_Credit (State, Buffer);
+
       Packets.Decode_Input (Buffer, Got);
 
       case Got.Channel is
@@ -934,7 +947,10 @@ package body SDPCM.Generic_IO is
                end if;
             end;
          when Packets.Control =>
-            if Got.IOCTL_Header.Command = IOCTL.Command (State.Command) then
+            if Got.IOCTL_Header.Command = IOCTL.Command (State.Command)
+              and Interfaces.Shift_Right (Got.IOCTL_Header.Flags, 16)
+                = Interfaces.Unsigned_32 (IOCTL.Last_Request)
+            then
                Found := True;
 
                if Got.IOCTL_Header.Command = IOCTL.GET_VAR then
@@ -1032,6 +1048,16 @@ package body SDPCM.Generic_IO is
               when others =>
                 (Kind => Continue));
 
+      function Sends_Frame return Boolean is
+         (case Executor.Start (State.Step).Kind is
+             when Executor.Upload_CLM =>
+                Chip.Has_CLM and State.Offset /= Natural'Last,
+             when Executor.IOCTL_Get
+                | Executor.IOCTL_Set
+                | Executor.IOCTL_Set_32 => State.Offset = 0,
+             when others => False);
+      --  The current step is going to send a frame
+
       function Need_Reading return Boolean is
          (case Executor.Start (State.Step).Kind is
              when Executor.Upload_CLM => State.Offset > 0,
@@ -1064,10 +1090,14 @@ package body SDPCM.Generic_IO is
          end if;
       end if;
 
-      if not Ok
-        and (State.Step not in 1 .. Executor.Last or else Need_Reading)
+      if (not Ok
+          and (State.Step not in 1 .. Executor.Last or else Need_Reading))
+        or else (State.Step in 1 .. Executor.Last
+                 and then Sends_Frame
+                 and then not Has_Credit (State))
       then
-         --  No response found, (no active step or the step needs reading)
+         --  No response found (no active step or the step needs reading),
+         --  or no credit to send the next frame of the step
          declare
             Length : constant Interfaces.Unsigned_32 :=
               Bus.Available_Packet_Length;
@@ -1081,7 +1111,10 @@ package body SDPCM.Generic_IO is
                raise Program_Error;  --  Buffer too small
             elsif State.Step not in 1 .. Executor.Last
               and then Bus.Is_Ready
+              and then Has_Credit (State)
+              and then State.Flow = 0
             then
+               --  Sending is allowed
                Change_State (State);
                Action := (Kind => Idle);
             else
@@ -1116,6 +1149,30 @@ package body SDPCM.Generic_IO is
          State.Joining := (Kind => Crashed);
       end if;
    end Poll;
+
+   -------------------
+   -- Update_Credit --
+   -------------------
+
+   procedure Update_Credit
+     (State  : in out Generic_IO.State;
+      Buffer : Buffer_Byte_Array)
+   is
+      use type Packets.SDPCM_Channel;
+      Header : Packets.SDPCM_Header
+        with Import, Address => Buffer'Address;
+   begin
+      if Buffer'Length >= Packets.SDPCM_Header'Size / 8
+        and then Packets.Is_Valid (Header.Tag)
+        and then (Header.Channel and 16#0F#) < 3
+      then
+         if Header.Credit - State.Credit <= Chip.Max_Credit_Diff then
+            State.Credit := Header.Credit;
+         end if;
+
+         State.Flow := Header.Flow;
+      end if;
+   end Update_Credit;
 
    --------------
    -- Set_GPIO --

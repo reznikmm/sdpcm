@@ -7,7 +7,15 @@ with SDPCM.Packets;
 
 package body SDPCM.IOCTL is
    TX_Sequence : Interfaces.Unsigned_8 := 0;
+   --  Sequence number of the next frame
+
    TX_Request  : Interfaces.Unsigned_16 := 0;
+   --  Id of the last IOCTL request
+
+   function Has_Credit (Credit : Interfaces.Unsigned_8) return Boolean is
+      (Interfaces."/=" (Credit, TX_Sequence));
+
+   function Last_Request return Interfaces.Unsigned_16 is (TX_Request);
 
    -----------------
    -- Data_Offset --
@@ -85,6 +93,7 @@ package body SDPCM.IOCTL is
       From   : Positive;
       To     : Positive)
    is
+      use type Interfaces.Unsigned_8;
 
       type Output_Data is record
          Prefix : Buffer_Byte_Array (1 .. Bus.Write_Prefix_Length);
@@ -115,8 +124,6 @@ package body SDPCM.IOCTL is
          return;
       end if;
 
-      TX_Sequence := Interfaces.Unsigned_8'Succ (TX_Sequence);
-
       Output :=
         (Prefix => Bus.Write_Prefix
            (Bus_Function => WLAN,
@@ -137,6 +144,7 @@ package body SDPCM.IOCTL is
          BDC  => (16#20#, 0, 0, 0),
          Data => <>);
 
+      TX_Sequence := TX_Sequence + 1;
       Bus.Start_Writing_WLAN (Buffer (1 .. To));
    end Send_Buffer;
 
@@ -170,7 +178,6 @@ package body SDPCM.IOCTL is
         with Import, Address => Buffer'Address;
 
    begin
-      TX_Sequence := TX_Sequence + 1;
       TX_Request := Interfaces.Unsigned_16'Succ (TX_Request);
 
       Output :=
@@ -195,11 +202,11 @@ package body SDPCM.IOCTL is
             Out_Length => Out_Length,
             In_Length  => 0,
             Flags      =>
-              (if Write
-               then Interfaces.Unsigned_32 (TX_Request) * 2**16 + 2
-               else 0),
+              Interfaces.Unsigned_32 (TX_Request) * 2**16
+                + (if Write then 2 else 0),
             Status     => 0));
 
+      TX_Sequence := TX_Sequence + 1;
       Bus.Start_Writing_WLAN (Buffer);
    end Set_In_Place;
 

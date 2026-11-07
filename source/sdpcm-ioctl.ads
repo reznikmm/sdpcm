@@ -57,6 +57,12 @@ package SDPCM.IOCTL is
 
    function Data_Offset (Write_Prefix_Length : Natural) return Positive;
 
+   function Has_Credit (Credit : Interfaces.Unsigned_8) return Boolean;
+   --  The device accepts one more frame
+
+   function Last_Request return Interfaces.Unsigned_16;
+   --  Id of the last IOCTL request. The response has the same Id.
+
    type IOCTL_Header is record
       Command    : IOCTL.Command;
       Out_Length : Interfaces.Unsigned_16;

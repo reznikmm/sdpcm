@@ -206,6 +206,11 @@ private
       Reading : Natural := 0;
       MAC     : Ether_Address := (others => 0);
       Link    : Link_State;
+      Credit  : Interfaces.Unsigned_8 := 1;
+      --  SDPCM bus data credit: the device accepts frames with sequence
+      --  numbers up to (but not including) this value
+      Flow    : Interfaces.Unsigned_8 := 0;
+      --  Wireless flow control bitmap, data is not sent if non-zero
    end record;
    --  Internal driver state.
    --  This record intentionally contains protocol progress, firmware loading
