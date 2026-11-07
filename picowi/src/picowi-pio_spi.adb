@@ -20,10 +20,15 @@ package body Picowi.PIO_SPI is
       WL_CS  => Pico.GP25,
       WL_CLK => GP29,
       P      => RP.Device.PIO_0,
-      SM     => 0);
+      SM     => 0,
+      DMA_Channel => DMA_Channel,
+      TX_Trigger  => RP.DMA.PIO0_TX0,
+      RX_Trigger  => RP.DMA.PIO0_RX0);
 
    procedure Chip_Select (On : Boolean) renames SPI.Chip_Select;
    procedure Power_On renames SPI.Power_On;
+   procedure Finish_Transfer renames SPI.Finish_SPI;
+   function Is_DMA_Busy return Boolean renames SPI.Is_DMA_Busy;
    procedure Configure_PIO renames SPI.Configure_PIO;
 
    --------------------
@@ -63,5 +68,27 @@ package body Picowi.PIO_SPI is
    begin
       SPI.Write_SPI (Raw);
    end Write;
+
+   ----------------
+   -- Start_Read --
+   ----------------
+
+   procedure Start_Read (Data : out SDPCM.Buffer_Byte_Array) is
+      Raw : HAL.UInt8_Array (Data'Range)
+        with Import, Address => Data'Address;
+   begin
+      SPI.Start_Read_SPI (Raw);
+   end Start_Read;
+
+   -----------------
+   -- Start_Write --
+   -----------------
+
+   procedure Start_Write (Data : SDPCM.Buffer_Byte_Array) is
+      Raw : HAL.UInt8_Array (Data'Range)
+        with Import, Address => Data'Address;
+   begin
+      SPI.Start_Write_SPI (Raw);
+   end Start_Write;
 
 end Picowi.PIO_SPI;

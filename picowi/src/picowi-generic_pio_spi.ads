@@ -5,6 +5,7 @@
 
 with HAL;
 
+with RP.DMA;
 with RP.GPIO;
 with RP.PIO;
 
@@ -16,6 +17,13 @@ generic
 
    P  : in out RP.PIO.PIO_Device;
    SM : RP.PIO.PIO_SM;
+
+   DMA_Channel : RP.DMA.DMA_Channel_Id;
+   --  DMA channel for asynchronous transfers
+
+   TX_Trigger  : RP.DMA.DMA_Request_Trigger;
+   RX_Trigger  : RP.DMA.DMA_Request_Trigger;
+   --  DMA requests of TX/RX FIFO of the state machine SM of P
 package Picowi.Generic_PIO_SPI is
    pragma Preelaborate;
 
@@ -31,5 +39,18 @@ package Picowi.Generic_PIO_SPI is
    procedure Chip_Select (On : Boolean);
    procedure Write_SPI (Data : HAL.UInt8_Array);
    procedure Read_SPI (Data : out HAL.UInt8_Array);
+
+   procedure Start_Write_SPI (Data : HAL.UInt8_Array);
+   --  Start writing Data by DMA. Call Finish_SPI after DMA completion.
+
+   procedure Start_Read_SPI (Data : out HAL.UInt8_Array);
+   --  Start reading Data by DMA. Call Finish_SPI after DMA completion.
+
+   function Is_DMA_Busy return Boolean;
+   --  DMA transfer is in progress
+
+   procedure Finish_SPI;
+   --  Finish the transfer started by Start_Write_SPI/Start_Read_SPI. Wait
+   --  until the last bits are on the wire for a write transfer.
 
 end Picowi.Generic_PIO_SPI;

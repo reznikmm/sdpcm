@@ -34,7 +34,7 @@ procedure Blink is
       Write_Prefix             => Picowi.PIO_SPI.gSPI.Write_Prefix,
       Start_Writing_WLAN       => Picowi.PIO_SPI.gSPI.Write_WLAN,
       Start_Reading_WLAN       => Picowi.PIO_SPI.gSPI.Read_WLAN,
-      Start_Writing_Backplane  => Picowi.PIO_SPI.gSPI.Write_Backplane,
+      Start_Writing_Backplane  => Picowi.PIO_SPI.gSPI.Start_Writing_Backplane,
       Is_Ready                 => Picowi.PIO_SPI.gSPI.Is_Ready,
       Available_Packet_Length  => Picowi.PIO_SPI.gSPI.Available_Packet_Length,
       Clear_Error              => Picowi.PIO_SPI.gSPI.Clear_Error);
@@ -131,7 +131,14 @@ begin
             when SDPCM_IO.Sleep =>
                RP.Device.Timer.Delay_Milliseconds (Action.Milliseconds);
             when SDPCM_IO.Complete_IO =>
-               null;  --  We use synchronous I/O in this demo. Do nothing
+               if Picowi.PIO_SPI.gSPI.Is_Transfer_Pending then
+                  --  No tasking here, so just wait for the end of DMA transfer
+                  while Picowi.PIO_SPI.Is_DMA_Busy loop
+                     null;
+                  end loop;
+
+                  Picowi.PIO_SPI.gSPI.Complete_Transfer;
+               end if;
             when SDPCM_IO.Process_Packet =>
                null;
          end case;

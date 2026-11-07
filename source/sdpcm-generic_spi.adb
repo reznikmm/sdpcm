@@ -8,6 +8,9 @@ with Ada.Unchecked_Conversion;
 package body SDPCM.Generic_SPI is
    use type Interfaces.Unsigned_32;
 
+   Pending : Boolean := False;
+   --  An asynchronous transfer is in progress
+
    package gSPI_Register is
       --  gSPI register addresses from the public datasheet.
 
@@ -118,6 +121,17 @@ package body SDPCM.Generic_SPI is
       end if;
    end Clear_Error;
 
+   -----------------------
+   -- Complete_Transfer --
+   -----------------------
+
+   procedure Complete_Transfer is
+   begin
+      Finish_Transfer;
+      Chip_Select (On => False);
+      Pending := False;
+   end Complete_Transfer;
+
    -----------------
    -- Detect_Chip --
    -----------------
@@ -158,6 +172,8 @@ package body SDPCM.Generic_SPI is
    --------------
    -- Is_Ready --
    --------------
+
+   function Is_Transfer_Pending return Boolean is (Pending);
 
    function Is_Ready return Boolean is
       F2_RX_READY : constant := 16#20#;
@@ -241,12 +257,19 @@ package body SDPCM.Generic_SPI is
    ---------------
 
    procedure Read_WLAN (Value : out Buffer_Byte_Array) is
+      Prefix : constant gSPI_Command :=
+        (Length  => Value'Length,
+         Address => 0,
+         Func    => SDPCM.WLAN,
+         Incr    => True,
+         Write   => False);
+
+      Raw : constant Word := To_Bytes (Prefix);
    begin
-      Read
-        (Bus_Function => SDPCM.WLAN,
-         Address      => 0,
-         Length       => Value'Length,
-         Value        => Value);
+      Chip_Select (On => True);
+      Write (Raw);
+      Start_Read (Value);
+      Pending := True;
    end Read_WLAN;
 
    ----------
@@ -314,16 +337,16 @@ package body SDPCM.Generic_SPI is
    -- Write_Backplane --
    ---------------------
 
-   procedure Write_Backplane
+   procedure Start_Writing_Backplane
      (Address : Interfaces.Unsigned_32;
       Value   : Buffer_Byte_Array)
    is
       pragma Unreferenced (Address);  --  Address is embedded in Value
    begin
       Chip_Select (On => True);
-      Write (Value);
-      Chip_Select (On => False);
-   end Write_Backplane;
+      Start_Write (Value);
+      Pending := True;
+   end Start_Writing_Backplane;
 
    ----------------
    -- Write_WLAN --
@@ -332,8 +355,8 @@ package body SDPCM.Generic_SPI is
    procedure Write_WLAN (Value : Buffer_Byte_Array) is
    begin
       Chip_Select (On => True);
-      Write (Value);
-      Chip_Select (On => False);
+      Start_Write (Value);
+      Pending := True;
    end Write_WLAN;
 
    ------------------------------
@@ -351,7 +374,9 @@ package body SDPCM.Generic_SPI is
       Output : constant Buffer_Byte_Array (1 .. 8) :=
         (Write_Prefix (Backplane, Address, Length) & To_Bytes (Value));
    begin
-      Write_Backplane (Address, Output);
+      Chip_Select (On => True);
+      Write (Output);
+      Chip_Select (On => False);
    end Write_Backplane_Register;
 
    ------------------

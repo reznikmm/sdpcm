@@ -4,11 +4,19 @@
 ----------------------------------------------------------------
 
 with Interfaces;
+
+with RP.DMA;
 with RP.Device;
+
 with Net.Headers;
 with Net.Protos.IPv4;
 
+with Enet_Picowi.DMA_Interrupt;
+
 package body Enet_Picowi.Generic_Interface is
+
+   procedure Wait_Transfer;
+   --  Wait for the end of asynchronous transfer, if any, and complete it
 
    type Uint16_Array is array (Positive range <>) of Net.Uint16;
 
@@ -93,6 +101,8 @@ package body Enet_Picowi.Generic_Interface is
 
       Picowi.PIO_SPI.gSPI.Switch_Endian (Ok);
       pragma Assert (Ok);
+
+      RP.DMA.Enable_IRQ (Picowi.PIO_SPI.DMA_Channel, 0);
    end Create;
 
    ----------
@@ -163,7 +173,6 @@ package body Enet_Picowi.Generic_Interface is
                      Raw,
                      Send   => (From, To => Size),
                      Action => Action);
-                  --  TBD: Complete IO then release Output buffer
                end;
             end;
          end if;
@@ -180,7 +189,8 @@ package body Enet_Picowi.Generic_Interface is
             when SDPCM_IO.Sleep =>
                RP.Device.Timer.Delay_Milliseconds (Action.Milliseconds);
             when SDPCM_IO.Complete_IO =>
-               null;  --  We use synchronous I/O in this demo. Do nothing
+               Wait_Transfer;
+               --  Release the sent packet, if any.
                Net.Buffers.Release (Output);
             when SDPCM_IO.Process_Packet =>
                declare
@@ -246,5 +256,17 @@ package body Enet_Picowi.Generic_Interface is
          end case;
       end if;
    end Set_Check_Sum;
+
+   -------------------
+   -- Wait_Transfer --
+   -------------------
+
+   procedure Wait_Transfer is
+   begin
+      if Picowi.PIO_SPI.gSPI.Is_Transfer_Pending then
+         Enet_Picowi.DMA_Interrupt.Wait;
+         Picowi.PIO_SPI.gSPI.Complete_Transfer;
+      end if;
+   end Wait_Transfer;
 
 end Enet_Picowi.Generic_Interface;
