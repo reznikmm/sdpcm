@@ -73,10 +73,11 @@ package SDPCM is
       with procedure Start_Reading_WLAN (Value : out Buffer_Byte_Array);
       --  Start asynchronous read from WLAN function.
 
-      with procedure Write_Backplane
+      with procedure Start_Writing_Backplane
         (Address : Interfaces.Unsigned_32;
          Value   : Buffer_Byte_Array);
-      --  Write to backplane function synchronously.
+      --  Write to backplane function (firmware upload). The bus may start
+      --  an asynchronous transfer, then the driver reports Complete_IO.
       --  Value should be prefixed with Write_Prefix with these parameters
       --   * Bus_Function => Backplane
       --   * Address => Address

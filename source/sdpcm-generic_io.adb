@@ -831,7 +831,7 @@ package body SDPCM.Generic_IO is
                   Length       => 3);
             end if;
 
-            Bus.Write_Backplane
+            Bus.Start_Writing_Backplane
               (Address => Value mod Window_Size,
                Value   => Buffer (1 .. Last));
 
@@ -1039,10 +1039,12 @@ package body SDPCM.Generic_IO is
                 | Executor.Wait_Is_Ready =>
                   (if State.Offset = 0 then (Kind => Continue)
                    else (Sleep, Milliseconds => 1)),
-              when Executor.Upload_CLM
+              when Executor.Upload_Firmware
+                | Executor.Upload_CLM
                 | Executor.IOCTL_Get
                 | Executor.IOCTL_Set
                 | Executor.IOCTL_Set_32 =>
+                --  A block of firmware or a request has been written
                 (if State.Offset = 0 then (Kind => Continue)
                  else (Kind => Complete_IO)),
               when others =>

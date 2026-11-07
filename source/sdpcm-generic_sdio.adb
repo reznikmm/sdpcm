@@ -62,15 +62,23 @@ package body SDPCM.Generic_SDIO is
    Pending     : Transfer_Kind := None;
    --  Kind of the asynchronous transfer in progress
 
-   Tail_Data   : System.Address;
-   Tail_Length : Natural := 0;
+   Tail_Data    : System.Address;
+   Tail_Length  : Natural := 0;
+   Tail_Address : Interfaces.Unsigned_32 := 0;
    --  The rest of the frame (less than a block) to be read by
-   --  Complete_Transfer after the asynchronous block read
+   --  Complete_Transfer after the asynchronous block read, or the rest of
+   --  the backplane data to be written at Tail_Address after the
+   --  asynchronous block write
 
    function Power_Of_Two
      (Value   : Positive;
       Minimum : Positive) return Positive;
    --  The smallest power of two not less than Value and Minimum
+
+   procedure Write_Tail
+     with Pre => Tail_Length > 0;
+   --  Write Tail_Length bytes from Tail_Data to the backplane at
+   --  Tail_Address synchronously, without padding
 
    procedure Read_Tail
      with Pre => Tail_Length > 0;
@@ -123,13 +131,12 @@ package body SDPCM.Generic_SDIO is
    procedure Extended
      (Write      : Boolean;
       Number     : Function_Number;
-      Block_Mode : Boolean;
       Address    : Interfaces.Unsigned_32;
       Count      : Positive;
-      Block_Size : Positive;
       Data       : System.Address;
-      Success    : out Boolean);
-   --  Send CMD53 with Count blocks/bytes
+      Success    : out Boolean)
+     with Pre => Count in 4 | 8 | 16 | 32 | 64;
+   --  Send byte mode CMD53 with Count bytes synchronously
 
    procedure Transfer_Exactly
      (Write   : Boolean;
@@ -137,10 +144,11 @@ package body SDPCM.Generic_SDIO is
       Address : Interfaces.Unsigned_32;
       Data    : System.Address;
       Length  : Natural;
-      Success : out Boolean);
-   --  Transfer exactly Length bytes: blocks first, then power of two byte
-   --  mode chunks, then single bytes (CMD52 for function 1, a padded word
-   --  for function 2).
+      Success : out Boolean)
+     with Pre => Length < Block_Size;
+   --  Transfer exactly Length bytes (less than a block) synchronously:
+   --  power of two byte mode chunks, then single bytes (CMD52 for function
+   --  1, a padded word for function 2).
 
    procedure Wait_For
      (Number   : Function_Number;
@@ -187,10 +195,8 @@ package body SDPCM.Generic_SDIO is
          Extended
            (Write      => False,
             Number     => Number (WLAN),
-            Block_Mode => False,
             Address    => 0,
             Count      => 4,
-            Block_Size => 4,
             Data       => Tag'Address,
             Success    => Success);
 
@@ -230,10 +236,8 @@ package body SDPCM.Generic_SDIO is
    procedure Extended
      (Write      : Boolean;
       Number     : Function_Number;
-      Block_Mode : Boolean;
       Address    : Interfaces.Unsigned_32;
       Count      : Positive;
-      Block_Size : Positive;
       Data       : System.Address;
       Success    : out Boolean)
    is
@@ -242,10 +246,10 @@ package body SDPCM.Generic_SDIO is
       IO_Read_Write_Extended
         (Argument   =>
            Extended_Argument
-             (Write, Number, Block_Mode, Address,
+             (Write, Number, False, Address,
               Interfaces.Unsigned_32 (Count)),
-         Block_Size => Block_Size,
-         Length     => (if Block_Mode then Count * Block_Size else Count),
+         Block_Size => Count,
+         Length     => Count,
          Data       => Data,
          Response   => Response,
          Success    => Success);
@@ -277,12 +281,22 @@ package body SDPCM.Generic_SDIO is
 
             if not Ok then
                Abort_Read;
+               Tail_Length := 0;
             elsif Tail_Length > 0 then
                Read_Tail;
             end if;
 
-         when Writing | None =>
+         when Writing =>
             Pending := None;
+
+            if not Ok then
+               Tail_Length := 0;
+            elsif Tail_Length > 0 then
+               Write_Tail;
+            end if;
+
+         when None =>
+            null;
       end case;
    end Complete_Transfer;
 
@@ -427,10 +441,8 @@ package body SDPCM.Generic_SDIO is
          Extended
            (Write      => False,
             Number     => Number (Backplane),
-            Block_Mode => False,
             Address    => Address,
             Count      => 4,
-            Block_Size => 4,
             Data       => Value'Address,
             Success    => Ignore);
       else
@@ -499,10 +511,8 @@ package body SDPCM.Generic_SDIO is
       Extended
         (Write      => False,
          Number     => Number (WLAN),
-         Block_Mode => False,
          Address    => 0,
          Count      => Chunk,
-         Block_Size => Chunk,
          Data       => Word'Address,
          Success    => Success);
 
@@ -609,27 +619,6 @@ package body SDPCM.Generic_SDIO is
    begin
       Success := True;
 
-      --  Whole blocks
-      while Success and Length - Offset >= Block_Size loop
-         declare
-            Count : constant Positive :=
-              Natural'Min ((Length - Offset) / Block_Size,
-                           Maximum_Block_Count);
-         begin
-            Extended
-              (Write      => Write,
-               Number     => Number,
-               Block_Mode => True,
-               Address    => Next_Address,
-               Count      => Count,
-               Block_Size => Block_Size,
-               Data       => Next_Data,
-               Success    => Success);
-
-            Offset := Offset + Count * Block_Size;
-         end;
-      end loop;
-
       --  Power of two chunks in byte mode: 32, 16, 8, 4
       while Success and Length - Offset >= 4 loop
          while Chunk > Length - Offset loop
@@ -639,10 +628,8 @@ package body SDPCM.Generic_SDIO is
          Extended
            (Write      => Write,
             Number     => Number,
-            Block_Mode => False,
             Address    => Next_Address,
             Count      => Chunk,
-            Block_Size => Chunk,
             Data       => Next_Data,
             Success    => Success);
 
@@ -666,10 +653,8 @@ package body SDPCM.Generic_SDIO is
                   Extended
                     (Write      => Write,
                      Number     => Number,
-                     Block_Mode => False,
                      Address    => Address,
                      Count      => 4,
-                     Block_Size => 4,
                      Data       => Word'Address,
                      Success    => Success);
 
@@ -724,17 +709,64 @@ package body SDPCM.Generic_SDIO is
      (Address : Interfaces.Unsigned_32;
       Value   : Buffer_Byte_Array)
    is
+      Blocks : constant Natural :=
+        Natural'Min (Value'Length / Block_Size, Maximum_Block_Count);
+      Ignore : Boolean;  --  Has_Failed reports errors
+   begin
+      Tail_Length := Value'Length - Blocks * Block_Size;
+
+      if Blocks = 0 then
+         --  Exact length: no padding to keep RAM after the image intact
+         Transfer_Exactly
+           (Write   => True,
+            Number  => Number (Backplane),
+            Address => Address,
+            Data    => Value'Address,
+            Length  => Value'Length,
+            Success => Ignore);
+
+         Tail_Length := 0;
+      else
+         if Tail_Length > 0 then
+            Tail_Data := Value (Value'First + Blocks * Block_Size)'Address;
+            Tail_Address :=
+              Address + Interfaces.Unsigned_32 (Blocks * Block_Size);
+         end if;
+
+         Pending := Writing;
+
+         Start_IO_Read_Write_Extended
+           (Argument   =>
+              Extended_Argument
+                (Write      => True,
+                 Number     => Number (Backplane),
+                 Block_Mode => True,
+                 Address    => Address,
+                 Count      => Interfaces.Unsigned_32 (Blocks)),
+            Block_Size => Block_Size,
+            Length     => Blocks * Block_Size,
+            Data       => Value'Address);
+      end if;
+   end Write_Backplane;
+
+   ----------------
+   -- Write_Tail --
+   ----------------
+
+   procedure Write_Tail is
       Ignore : Boolean;  --  Has_Failed reports errors
    begin
       --  Exact length: no padding to keep RAM after the image intact
       Transfer_Exactly
         (Write   => True,
          Number  => Number (Backplane),
-         Address => Address,
-         Data    => Value'Address,
-         Length  => Value'Length,
+         Address => Tail_Address,
+         Data    => Tail_Data,
+         Length  => Tail_Length,
          Success => Ignore);
-   end Write_Backplane;
+
+      Tail_Length := 0;
+   end Write_Tail;
 
    ------------------------------
    -- Write_Backplane_Register --
@@ -753,10 +785,8 @@ package body SDPCM.Generic_SDIO is
          Extended
            (Write      => True,
             Number     => Number (Backplane),
-            Block_Mode => False,
             Address    => Address,
             Count      => 4,
-            Block_Size => 4,
             Data       => Data'Address,
             Success    => Ignore);
       else
@@ -803,6 +833,7 @@ package body SDPCM.Generic_SDIO is
    begin
       --  One CMD53 per frame, padded up to the block size or to a power of
       --  two in byte mode (the STM32 data path works with blocks only).
+      Tail_Length := 0;  --  Frames are padded, no tail
       Pending := Writing;
 
       if Length >= Block_Size then

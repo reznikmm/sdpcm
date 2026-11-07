@@ -41,7 +41,7 @@ generic
    DMA_Priority : System.Interrupt_Priority := System.Interrupt_Priority'First;
    --  Priority of SDIO and DMA interrupt handlers
 
-   Bus_Speed   : Positive := 400_000;
+   Bus_Speed   : Positive := 24_000_000;
    --  SDIO_CK frequency (Hz) after card identification. Register access and
    --  firmware upload use polling without hardware flow control, so keep it
    --  moderate.
@@ -129,7 +129,7 @@ private
       Write_Prefix             => SDIO_Bus.Write_Prefix,
       Start_Writing_WLAN       => SDIO_Bus.Write_WLAN,
       Start_Reading_WLAN       => SDIO_Bus.Read_WLAN,
-      Write_Backplane          => SDIO_Bus.Write_Backplane,
+      Start_Writing_Backplane  => SDIO_Bus.Write_Backplane,
       Is_Ready                 => SDIO_Bus.Is_Ready,
       Available_Packet_Length  => SDIO_Bus.Available_Packet_Length,
       Clear_Error              => SDIO_Bus.Clear_Error);

@@ -14,9 +14,10 @@
 --  CMD7) before calling Initialize. After Switch_To_Four_Bit_Bus the host
 --  should switch its own bus width too.
 --
---  Register access, firmware upload and frame length polling are
---  synchronous (IO_Read_Write_Direct, IO_Read_Write_Extended). Frame
---  transfers (Write_WLAN, Read_WLAN) start an asynchronous CMD53 with
+--  Register access and frame length polling are synchronous
+--  (IO_Read_Write_Direct, IO_Read_Write_Extended). Frame transfers
+--  (Write_WLAN, Read_WLAN) and firmware upload (Write_Backplane) start an
+--  asynchronous CMD53 with
 --  Start_IO_Read_Write_Extended, for instance a DMA transfer. When
 --  Is_Transfer_Pending is True, the host should wait for the end of the
 --  transfer and call Complete_Transfer before any other call.
@@ -38,11 +39,12 @@ generic
       Data       : System.Address;
       Response   : out Interfaces.Unsigned_32;
       Success    : out Boolean);
-   --  Send CMD53 (IO_RW_EXTENDED) and transfer Length bytes from/to Data.
-   --  Bit 31 of Argument defines the direction (1 means writing to the
-   --  card). Block_Size is a power of two in 4 .. 64 and Length is a
-   --  multiple of Block_Size. Data is word aligned. In byte mode (bit 27 is
-   --  0) Block_Size = Length.
+   --  Send byte mode CMD53 (IO_RW_EXTENDED) and transfer Length bytes
+   --  from/to Data. Bit 31 of Argument defines the direction (1 means
+   --  writing to the card). Length is a power of two in 4 .. 64 and
+   --  Block_Size = Length (the STM32 data path works with blocks only).
+   --  Data is word aligned. It is used for registers and short transfers
+   --  only, so a polling host works without FIFO underrun/overrun.
 
    with procedure Start_IO_Read_Write_Extended
      (Argument   : Interfaces.Unsigned_32;
@@ -103,7 +105,12 @@ package SDPCM.Generic_SDIO is
    procedure Write_Backplane
      (Address : Interfaces.Unsigned_32;
       Value   : Buffer_Byte_Array);
-   --  Write Value to the backplane window at Address
+   --  Start writing Value to the backplane window at Address. Whole blocks
+   --  are written asynchronously, the rest (less than a block) is written
+   --  by Complete_Transfer without padding, to keep RAM after the image
+   --  intact. A short Value is written synchronously and
+   --  Is_Transfer_Pending is False then. Value should not be changed until
+   --  Complete_Transfer.
 
    procedure Write_WLAN (Value : Buffer_Byte_Array);
    --  Start sending a frame to function 2. The transfer is padded up to the
@@ -120,8 +127,8 @@ package SDPCM.Generic_SDIO is
    --  Is_Transfer_Pending is False then.
 
    function Is_Transfer_Pending return Boolean;
-   --  An asynchronous transfer started by Write_WLAN or Read_WLAN should be
-   --  completed by Complete_Transfer
+   --  An asynchronous transfer started by Write_WLAN, Read_WLAN or
+   --  Write_Backplane should be completed by Complete_Transfer
 
    procedure Complete_Transfer
      (Response : Interfaces.Unsigned_32;

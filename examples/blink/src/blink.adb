@@ -34,7 +34,7 @@ procedure Blink is
       Write_Prefix             => Picowi.PIO_SPI.gSPI.Write_Prefix,
       Start_Writing_WLAN       => Picowi.PIO_SPI.gSPI.Write_WLAN,
       Start_Reading_WLAN       => Picowi.PIO_SPI.gSPI.Read_WLAN,
-      Write_Backplane          => Picowi.PIO_SPI.gSPI.Write_Backplane,
+      Start_Writing_Backplane  => Picowi.PIO_SPI.gSPI.Write_Backplane,
       Is_Ready                 => Picowi.PIO_SPI.gSPI.Is_Ready,
       Available_Packet_Length  => Picowi.PIO_SPI.gSPI.Available_Packet_Length,
       Clear_Error              => Picowi.PIO_SPI.gSPI.Clear_Error);
