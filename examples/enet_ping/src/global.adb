@@ -11,7 +11,7 @@ with Net.Utils;
 
 package body Global is
 
-   Buffer_Memory : array (1 .. 16 * 1024) of Net.Uint8;
+   Buffer_Memory : array (1 .. 32 * 1024) of Net.Uint8;
 
    package LAN_Receiver is new Net.Generic_Receiver
      (Net.Interfaces.Ifnet_Type'Class (MAC));
