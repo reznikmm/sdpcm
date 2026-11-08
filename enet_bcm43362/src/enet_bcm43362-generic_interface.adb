@@ -10,11 +10,35 @@ with A0B.Callbacks.Generic_Parameterless;
 with Net.Headers;
 with Net.Protos.IPv4;
 
+with Enet_Config;
+
 with STM32.GPIO;
 with STM32.Polling.SDIO;
 with STM32.SDIO.DMA_SDIO;
 
 package body Enet_BCM43362.Generic_Interface is
+
+   pragma Compile_Time_Error
+     (Enet_Config.Headroom < 18,
+      "enet.Headroom should be at least 18 (bus prefix and SDPCM header)");
+
+   pragma Compile_Time_Error
+     ((Enet_Config.Headroom - SDPCM.Data_Header_Length) mod 4 /= 0,
+      "enet.Headroom - 18 should be a multiple of 4 for word aligned frames");
+
+   Rx_Offset : constant := SDPCM.Data_Header_Length;
+   --  A received frame is placed Rx_Offset bytes before the Ethernet header,
+   --  so the Ethernet header is in place if the frame header has the usual
+   --  length.
+
+   function Tx_Offset return Positive is
+     (SDIO_Bus.Write_Prefix_Length + SDPCM.Data_Header_Length);
+   --  A frame to send is placed Tx_Offset bytes before the Ethernet header,
+   --  so the driver doesn't move the data to put the headers.
+
+   function Buffer_Length (Offset : Positive) return Positive is
+     (Positive (Net.Buffers.NET_BUF_SIZE) + Offset);
+   --  Length of the buffer starting Offset bytes before the Ethernet header
 
    use type Interfaces.Unsigned_32;
    use type STM32.SDIO.Error_Kind;
@@ -323,9 +347,9 @@ package body Enet_BCM43362.Generic_Interface is
 
          if Net.Buffers.Is_Null (Output) then
             declare
-               Raw : SDPCM.Buffer_Byte_Array
-                 (1 .. Net.Buffers.Data_Type'Length)
-                   with Import, Address => Packet.Get_Data_Address;
+               Raw : SDPCM.Buffer_Byte_Array (1 .. Buffer_Length (Rx_Offset))
+                 with Import,
+                   Address => Packet.Get_Buffer_Address (Rx_Offset);
             begin
                SDPCM_IO.Poll (Self.State, Raw, Action => Action);
             end;
@@ -334,14 +358,16 @@ package body Enet_BCM43362.Generic_Interface is
 
             declare
                Size : constant Positive := Positive (Output.Get_Length);
-               Raw  : SDPCM.Buffer_Byte_Array
-                 (1 .. Net.Buffers.Data_Type'Length)
-                   with Import, Address => Output.Get_Data_Address;
+               Raw  : SDPCM.Buffer_Byte_Array (1 .. Buffer_Length (Tx_Offset))
+                 with Import,
+                   Address => Output.Get_Buffer_Address
+                                (Net.Uint16 (Tx_Offset));
             begin
+               --  The headers go to the reserved space before the data
                SDPCM_IO.Poll
                  (Self.State,
                   Raw,
-                  Send   => (From => 1, To => Size),
+                  Send   => (From => Tx_Offset + 1, To => Tx_Offset + Size),
                   Action => Action);
             end;
          end if;
@@ -370,10 +396,16 @@ package body Enet_BCM43362.Generic_Interface is
                   From : constant Positive := Action.Span.From;
                   To   : constant Positive := Action.Span.To;
                   Raw  : SDPCM.Buffer_Byte_Array
-                    (1 .. Net.Buffers.Data_Type'Length)
-                      with Import, Address => Packet.Get_Data_Address;
+                    (1 .. Buffer_Length (Rx_Offset))
+                      with Import,
+                        Address => Packet.Get_Buffer_Address (Rx_Offset);
                begin
-                  Raw (1 .. To - From + 1) := Raw (From .. To);
+                  if From /= Rx_Offset + 1 then
+                     --  Unusual header length, move the Ethernet frame
+                     Raw (Rx_Offset + 1 .. Rx_Offset + To - From + 1) :=
+                       Raw (From .. To);
+                  end if;
+
                   Packet.Set_Length (Net.Uint16 (To - From + 1));
 
                   exit;

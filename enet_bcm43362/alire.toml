@@ -24,11 +24,13 @@ light_tasking_stm32f4xx = "*"
 
 [[pins]]
 sdpcm = { path='..' }
-enet = { url='https://github.com/stcarrez/ada-enet' }
+enet = { url='https://github.com/reznikmm/ada-enet', branch='topic/headroom' }
 aa_stm32_drivers = { url="https://github.com/reznikmm/aa_stm32_drivers" }
 light_tasking_stm32f4xx = { url="https://github.com/reznikmm/community-bb-runtimes", subdir="light-tasking-stm32f4xx", branch="16.0.0" }
 
 [configuration.values]
-enet.Default_Random = "null"
+enet.Default_Random = "none"
+enet.Headroom = 18  # SDPCM header before Ethernet
+enet.Tailroom = 8
 aa_stm32_drivers.aa_mcu = "stm32f411"
 light_tasking_stm32f4xx.MCU_Sub_Family = "F411"

@@ -29,6 +29,11 @@ package SDPCM is
    --  * @enum WPA_TKIP - WPA with TKIP encryption
    --  * @enum WPA2_AES - WPA2 with AES encryption
 
+   Data_Header_Length : constant := 18;
+   --  Length of the SDPCM header (12), padding (2) and BDC header (4) of a
+   --  data frame sent by the driver. The bus prefix (if any) goes before.
+   --  Received data frames usually have the same header length.
+
    type Byte_Array is array (Positive range <>) of Interfaces.Unsigned_8
      with Component_Size => 8;
    --  Array of bytes.

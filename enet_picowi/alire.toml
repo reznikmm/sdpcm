@@ -16,10 +16,12 @@ light_tasking_rp2040 = "*"
 
 [[pins]]
 picowi = { path='../picowi' }
-enet = { url='https://github.com/stcarrez/ada-enet' }
+enet = { url='https://github.com/reznikmm/ada-enet', branch='topic/headroom' }
 
 [configuration.values]
 light_tasking_rp2040.Max_CPUs = 1
-enet.Default_Random = "null"
+enet.Default_Random = "none"
+enet.Headroom = 22  # bus prefix (gSPI) and SDPCM header before Ethernet
+enet.Tailroom = 8
 rp2040_hal.Use_Startup = false
 rp2040_hal.Interrupts = "bb_runtimes"
